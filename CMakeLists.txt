@@ -9,12 +9,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
-
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 find_package(Eigen3 REQUIRED)
+find_package(PCL REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 file(GLOB_RECURSE PROJECT_SOURCE
     CONFIGURE_DEPENDS
@@ -22,11 +24,21 @@ file(GLOB_RECURSE PROJECT_SOURCE
     ${PROJECT_SOURCE_DIR}/src/*.cxx
     ${PROJECT_SOURCE_DIR}/src/*.cc
 )
+include_directories(
+    src
+    ${sensor_msgs_INCLUDE_DIRS}
+)
 
 add_executable(
     app
     ${PROJECT_SOURCE}
 )
+target_link_libraries(
+    app
+    rclcpp::rclcpp
+    ${sensor_msgs_LIBRARIES}
+)
+
 
 include(cmake/version.cmake)
 include(cmake/export.cmake)

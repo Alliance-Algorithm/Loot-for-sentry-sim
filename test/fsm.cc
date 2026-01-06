@@ -1,7 +1,5 @@
 #include "util/fsm.hh"
-
 #include <print>
-#include <thread>
 
 auto main() -> int {
     std::println("Hello World");
@@ -42,8 +40,5 @@ auto main() -> int {
     for (;;) {
         if (fsm.spin_once())
             break;
-
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(200ms);
     }
 }

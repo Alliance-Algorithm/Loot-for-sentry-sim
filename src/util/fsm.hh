@@ -29,11 +29,16 @@ public:
     explicit Fsm(state_type start_state) noexcept
         : current_state{start_state}
         , current_event{nullptr} {
-        if (start_state == state_type::END) {
-            throw std::invalid_argument("start_state cannot be END");
-        }
+        assert(start_state != StateKey::END && "start_state cannot be END");
     }
 
+    /// @note 回调函数副作用说明：
+    /// - on_begin(): 状态进入时调用一次，用于初始化
+    /// - on_event(): 状态激活时反复调用，返回值决定：
+    ///   * 保持当前状态：返回当前状态值
+    ///   * 状态转移：返回目标状态值
+    ///   * 终止状态机：返回 END
+    /// 注意：回调中避免耗时操作和修改状态机注册信息
     template <typename on_begin_type, typename on_event_type>
     auto use(state_type state, on_begin_type&& on_begin, on_event_type&& on_event) {
         static_assert(
@@ -43,8 +48,8 @@ public:
             "on_event must be callable returning state_type");
 
         struct State final : IState {
-            on_begin_type impl_on_begin;
-            on_event_type impl_on_event;
+            [[no_unique_address]] std::decay_t<on_begin_type> impl_on_begin;
+            [[no_unique_address]] std::decay_t<on_event_type> impl_on_event;
 
             explicit State(on_begin_type&& on_begin, on_event_type&& on_event)
                 : impl_on_begin{std::forward<on_begin_type>(on_begin)}
@@ -66,10 +71,16 @@ public:
         use(state, std::forward<_1>(on_begin), std::forward<_2>(on_event));
     }
 
-    auto registered_count() const noexcept -> std::size_t {
+    template <state_type state>
+    auto use(auto&& on_event) {
+        using _1 = decltype(on_event);
+        use(state, [] {}, std::forward<_1>(on_event));
+    }
+
+    [[nodiscard]] auto registered_count() const noexcept -> std::size_t {
         return std::ranges::count_if(states_map, [](const auto& event) { return bool{event}; });
     }
-    auto fully_registered() const noexcept -> bool {
+    [[nodiscard]] auto fully_registered() const noexcept -> bool {
         return registered_count() == states_map.size();
     }
 
