@@ -1,12 +1,15 @@
-#pragma once
+module;
+
 #include <algorithm>
 #include <cassert>
 #include <memory>
 #include <utility>
 
+export module util.fsm;
+
 namespace rmcs {
 
-template <typename state_type>
+export template <typename state_type>
 class Fsm {
     static_assert(std::is_enum_v<state_type>, "state_type must be an enum");
     static_assert(requires { state_type::END; }, "state_type::END is required");

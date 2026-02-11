@@ -1,0 +1,7 @@
+CompileFlags:
+  Remove:
+    # For module exporting, ignore gcc private flags
+    - -fmodules-ts
+    - -fmodule-mapper=*
+    - -fdeps-format=*
+    - -fprebuilt-module-path=*

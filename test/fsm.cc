@@ -1,5 +1,6 @@
-#include "util/fsm.hh"
 #include <print>
+
+import util.fsm;
 
 auto main() -> int {
     std::println("Hello World");

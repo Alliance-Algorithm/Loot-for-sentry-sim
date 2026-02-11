@@ -1,0 +1,13 @@
+module;
+
+export module app.test;
+
+namespace rmcs::app {
+
+export class Test final {
+
+public:
+    auto run() -> void;
+};
+
+} // namespace rmcs::app
