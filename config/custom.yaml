@@ -1,0 +1,4 @@
+debug_goal_bridge:
+  ros__parameters:
+    use_sim_time: false
+    goal_frame: base_link

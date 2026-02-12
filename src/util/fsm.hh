@@ -1,15 +1,16 @@
-module;
+#pragma once
 
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cstddef>
 #include <memory>
+#include <type_traits>
 #include <utility>
-
-export module util.fsm;
 
 namespace rmcs {
 
-export template <typename state_type>
+template <typename state_type>
 class Fsm {
     static_assert(std::is_enum_v<state_type>, "state_type must be an enum");
     static_assert(requires { state_type::END; }, "state_type::END is required");
@@ -35,13 +36,6 @@ public:
         assert(start_state != StateKey::END && "start_state cannot be END");
     }
 
-    /// @note 回调函数副作用说明：
-    /// - on_begin(): 状态进入时调用一次，用于初始化
-    /// - on_event(): 状态激活时反复调用，返回值决定：
-    ///   * 保持当前状态：返回当前状态值
-    ///   * 状态转移：返回目标状态值
-    ///   * 终止状态机：返回 END
-    /// 注意：回调中避免耗时操作和修改状态机注册信息
     template <typename on_begin_type, typename on_event_type>
     auto use(state_type state, on_begin_type&& on_begin, on_event_type&& on_event) {
         static_assert(
@@ -92,7 +86,7 @@ public:
         current_event = nullptr;
     }
 
-    /// @return: should stop fsm
+    /// @return: Is Stop
     auto spin_once() -> bool {
         if (current_event == nullptr) {
             current_event = states_map.at(std::to_underlying(current_state)).get();

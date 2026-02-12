@@ -20,40 +20,69 @@ endif()
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rmcs_msgs REQUIRED)
+find_package(rmcs_executor REQUIRED)
+find_package(pluginlib REQUIRED)
 
-file(GLOB_RECURSE PROJECT_SOURCE
-    CONFIGURE_DEPENDS
-    ${PROJECT_SOURCE_DIR}/src/*.cpp
-    ${PROJECT_SOURCE_DIR}/src/*.cxx
-    ${PROJECT_SOURCE_DIR}/src/*.cc
-)
-file(GLOB_RECURSE PROJECT_MODULE
-    CONFIGURE_DEPENDS
-    ${PROJECT_SOURCE_DIR}/src/*.cppm
-    ${PROJECT_SOURCE_DIR}/src/*.cxxm
-    ${PROJECT_SOURCE_DIR}/src/*.ccm
-)
-include_directories(
-    src
-    ${sensor_msgs_INCLUDE_DIRS}
-)
+# file(GLOB_RECURSE PROJECT_SOURCE
+#     CONFIGURE_DEPENDS
+#     ${PROJECT_SOURCE_DIR}/src/*.cpp
+#     ${PROJECT_SOURCE_DIR}/src/*.cxx
+#     ${PROJECT_SOURCE_DIR}/src/*.cc
+# )
+# file(GLOB_RECURSE PROJECT_MODULE
+#     CONFIGURE_DEPENDS
+#     ${PROJECT_SOURCE_DIR}/src/*.cppm
+#     ${PROJECT_SOURCE_DIR}/src/*.cxxm
+#     ${PROJECT_SOURCE_DIR}/src/*.ccm
+# )
+# include_directories(
+#     src
+#     ${sensor_msgs_INCLUDE_DIRS}
+# )
+#
+# add_executable(
+#     app
+#     ${PROJECT_SOURCE}
+# )
+# target_sources(
+#     app
+#     PUBLIC FILE_SET CXX_MODULES FILES
+#         ${PROJECT_MODULE}
+# )
+# target_link_libraries(
+#     app
+#     rclcpp::rclcpp
+#     ${sensor_msgs_LIBRARIES}
+# )
 
-add_executable(
-    app
-    ${PROJECT_SOURCE}
-)
+# RMCS Component
+add_library(${PROJECT_NAME}_brain SHARED)
 target_sources(
-    app
-    PUBLIC FILE_SET CXX_MODULES FILES
-        ${PROJECT_MODULE}
+    ${PROJECT_NAME}_brain
+    PRIVATE
+        src/brain.cc
+)
+target_include_directories(
+    ${PROJECT_NAME}_brain
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/
+        ${rmcs_executor_INCLUDE_DIRS}
+        ${geometry_msgs_INCLUDE_DIRS}
+        ${rmcs_msgs_INCLUDE_DIRS}
 )
 target_link_libraries(
-    app
+    ${PROJECT_NAME}_brain
     rclcpp::rclcpp
-    ${sensor_msgs_LIBRARIES}
+    ${rmcs_executor_LIBRARIES}
+    ${geometry_msgs_LIBRARIES}
+    ${rmcs_msgs_LIBRARIES}
 )
 
+pluginlib_export_plugin_description_file(
+    rmcs_executor plugins.xml
+)
 
 include(cmake/version.cmake)
 include(cmake/export.cmake)

@@ -20,9 +20,3 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_gtest REQUIRED)
 
 ament_add_gtest(fsm_test fsm.cc)
-target_sources(
-    fsm_test
-    PUBLIC FILE_SET CXX_MODULES
-        BASE_DIRS ${SOURCE_DIR}
-        FILES ${SOURCE_DIR}/util/fsm.ccm
-)
