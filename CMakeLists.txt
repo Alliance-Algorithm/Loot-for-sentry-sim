@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 4.0.2)
+cmake_minimum_required(VERSION 3.30)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 
-cmake_policy(SET CMP0167 OLD)
-cmake_policy(SET CMP0144 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0167 OLD)
+set(CMAKE_POLICY_DEFAULT_CMP0144 NEW)
 
 project(rmcs-navigation)
 
@@ -18,12 +18,15 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(Eigen3 REQUIRED)
-find_package(PCL REQUIRED)
+find_package(yaml-cpp REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(PCL REQUIRED)
+
 find_package(geometry_msgs REQUIRED)
 find_package(rmcs_msgs REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+
 find_package(rmcs_executor REQUIRED)
-find_package(pluginlib REQUIRED)
 
 # file(GLOB_RECURSE PROJECT_SOURCE
 #     CONFIGURE_DEPENDS
@@ -63,6 +66,7 @@ target_sources(
     ${PROJECT_NAME}_brain
     PRIVATE
         src/brain.cc
+        src/brain/plan.cc
 )
 target_include_directories(
     ${PROJECT_NAME}_brain
@@ -71,15 +75,18 @@ target_include_directories(
         ${rmcs_executor_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
         ${rmcs_msgs_INCLUDE_DIRS}
+        ${ament_index_cpp_INCLUDE_DIRS}
 )
 target_link_libraries(
     ${PROJECT_NAME}_brain
     rclcpp::rclcpp
+    ament_index_cpp::ament_index_cpp
+    yaml-cpp::yaml-cpp
     ${rmcs_executor_LIBRARIES}
     ${geometry_msgs_LIBRARIES}
     ${rmcs_msgs_LIBRARIES}
 )
-
+find_package(pluginlib REQUIRED)
 pluginlib_export_plugin_description_file(
     rmcs_executor plugins.xml
 )

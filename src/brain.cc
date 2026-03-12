@@ -1,7 +1,9 @@
 #include "brain/plan.hh"
 #include "util/fsm.hh"
 
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <eigen3/Eigen/Geometry>
+#include <filesystem>
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
@@ -10,6 +12,10 @@
 #include <rmcs_msgs/game_stage.hpp>
 
 namespace rmcs {
+
+constexpr auto kAppLabel = std::string_view{"rmcs-navigation"};
+constexpr auto kRosLabel = std::string_view{"rmcs_navigation"};
+constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
 
 class Brain
     : public rmcs_executor::Component
@@ -90,8 +96,14 @@ private:
 
 public:
     explicit Brain()
-        : Node{"rmcs_navigation"} {
-        constexpr auto nan = std::numeric_limits<double>::quiet_NaN();
+        : Node{kRosLabel.data()} {
+
+        // RMCS
+        const auto name = std::format("/{}/command_velocity", kAppLabel);
+        const auto vec_nan = Eigen::Vector3d{kNan, kNan, kNan};
+        Component::register_output(name, command_velocity, vec_nan);
+
+        Component::register_input("/referee/game_stage", game_stage, false);
 
         // NAV2
         subscription_twist = Node::create_subscription<Twist>(
@@ -101,14 +113,23 @@ public:
                 command_velocity->z() = msg->angular.z;
             });
 
-        // RMCS
-        Component::register_output(
-            "/rmcs_navigation/command_velocity", command_velocity, Eigen::Vector3d{nan, nan, nan});
-
-        Component::register_input("/referee/game_stage", game_stage, false);
-
         // FSM
         generate_brain_fsm();
+
+        // Details
+        const auto config_path = ament_index_cpp::get_package_share_directory(kAppLabel.data());
+        const auto config_file = std::filesystem::path{config_path} / "config" / "rule.yaml";
+        const auto config_yaml = YAML::LoadFile(config_file);
+
+        plan_box.set_rule(config_yaml);
+
+        auto emitter = YAML::Emitter{};
+        emitter.SetIndent(2);
+        emitter.SetMapFormat(YAML::Block);
+        emitter.SetSeqFormat(YAML::Block);
+
+        emitter << config_yaml;
+        info("Rule Config:\n{}", emitter.c_str());
     }
 
     auto update() -> void override {

@@ -1,4 +1,6 @@
 import os
+import math
+import yaml
 
 from ament_index_python.packages import (
     get_package_prefix,
@@ -36,6 +38,12 @@ MODE_MAP = {
         "use_sim_time": False,
         "nav2_delay_sec": 0.0,
     },
+    "follow": {
+        "use_point_lio": True,
+        "use_bag": False,
+        "use_sim_time": False,
+        "nav2_delay_sec": 0.0,
+    },
 }
 
 MAP_SOURCE_TO_MODE = {
@@ -54,10 +62,15 @@ def _build_mode_actions(
 ):
     mode = LaunchConfiguration("mode").perform(context)
     bag_path = LaunchConfiguration("bag_path")
+    bag_use_clock = LaunchConfiguration("bag_use_clock").perform(context)
     local_map_topic = LaunchConfiguration("local_map_topic")
     global_map_topic = LaunchConfiguration("global_map_topic")
     map_source = LaunchConfiguration("map_source").perform(context)
     pose_fallback = LaunchConfiguration("pose_fallback").perform(context)
+    follow_waypoints_file = LaunchConfiguration(
+        "follow_waypoints_file"
+    ).perform(context)
+    follow_start_delay_sec = LaunchConfiguration("follow_start_delay_sec")
 
     if mode not in MODE_MAP:
         raise RuntimeError(
@@ -90,6 +103,28 @@ def _build_mode_actions(
             output="screen",
         ),
     ]
+
+    if mode == "follow":
+        goal_text = _build_follow_waypoints_goal(follow_waypoints_file)
+        nav2_actions.append(
+            TimerAction(
+                period=follow_start_delay_sec,
+                actions=[
+                    ExecuteProcess(
+                        cmd=[
+                            "ros2",
+                            "action",
+                            "send_goal",
+                            "/follow_waypoints",
+                            "nav2_msgs/action/FollowWaypoints",
+                            goal_text,
+                        ],
+                        output="screen",
+                    )
+                ],
+            )
+        )
+
     actions = []
 
     if mode_cfg["use_point_lio"] and not use_pose_fallback:
@@ -146,9 +181,12 @@ def _build_mode_actions(
         actions.extend(nav2_actions)
 
     if mode_cfg["use_bag"]:
+        bag_cmd = ["ros2", "bag", "play", bag_path]
+        if bag_use_clock.lower() in {"1", "true", "yes", "on"}:
+            bag_cmd.append("--clock")
         actions.append(
             ExecuteProcess(
-                cmd=["ros2", "bag", "play", bag_path, "--clock"],
+                cmd=bag_cmd,
                 output="screen",
             )
         )
@@ -179,12 +217,24 @@ def generate_launch_description():
         "rmcs-navigation",
         "static_grid_publisher.py",
     )
+    custom_config = _load_custom_config(
+        os.path.join(navigation_share, "config", "custom.yaml")
+    )
+    bag_config = custom_config.get("bag", {})
+    bag_path_default = str(
+        bag_config.get("path", "/workspaces/data/bag/battlefield_1")
+    )
+    bag_use_clock_default = str(
+        bag_config.get("use_clock", True)
+    ).lower()
+
     return LaunchDescription([
         DeclareLaunchArgument("mode", default_value="online"),
         DeclareLaunchArgument(
             "bag_path",
-            default_value="/workspaces/data/bag/battlefield_1",
+            default_value=bag_path_default,
         ),
+        DeclareLaunchArgument("bag_use_clock", default_value=bag_use_clock_default),
         DeclareLaunchArgument(
             "local_map_topic",
             default_value="/local_map",
@@ -195,6 +245,15 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("map_source", default_value="empty"),
         DeclareLaunchArgument("pose_fallback", default_value="false"),
+        DeclareLaunchArgument(
+            "follow_waypoints_file",
+            default_value=os.path.join(
+                navigation_share,
+                "config",
+                "follow_waypoints.yaml",
+            ),
+        ),
+        DeclareLaunchArgument("follow_start_delay_sec", default_value="2.0"),
         OpaqueFunction(
             function=_build_mode_actions,
             kwargs={
@@ -205,3 +264,49 @@ def generate_launch_description():
             },
         ),
     ])
+
+
+def _build_follow_waypoints_goal(config_file):
+    with open(config_file, "r", encoding="utf-8") as stream:
+        content = yaml.safe_load(stream) or {}
+
+    follow = content.get("follow", {})
+    frame_id = follow.get("frame_id", "world")
+    waypoints = follow.get("poses", [])
+
+    if not waypoints:
+        raise RuntimeError(f"No waypoints in follow config: {config_file}")
+
+    pose_entries = []
+    for point in waypoints:
+        x, y, yaw = _parse_waypoint(point)
+        qz = math.sin(yaw / 2.0)
+        qw = math.cos(yaw / 2.0)
+        pose_entries.append(
+            "{header: {frame_id: '%s'}, pose: {position: {x: %s, y: %s, "
+            "z: 0.0}, orientation: {x: 0.0, y: 0.0, z: %s, w: %s}}}"
+            % (frame_id, x, y, qz, qw)
+        )
+
+    return "{poses: [%s]}" % ", ".join(pose_entries)
+
+
+def _load_custom_config(config_file):
+    with open(config_file, "r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream) or {}
+
+
+def _parse_waypoint(point):
+    if isinstance(point, list) and len(point) >= 2:
+        x = float(point[0])
+        y = float(point[1])
+        yaw = float(point[2]) if len(point) >= 3 else 0.0
+        return x, y, yaw
+
+    if isinstance(point, dict):
+        x = float(point.get("x", 0.0))
+        y = float(point.get("y", 0.0))
+        yaw = float(point.get("yaw", 0.0))
+        return x, y, yaw
+
+    raise RuntimeError(f"Invalid waypoint format: {point}")
