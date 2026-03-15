@@ -1,3 +1,0 @@
-[submodule "src/deps/livox-ros-driver2"]
-	path = src/deps/livox-ros-driver2
-	url = https://github.com/Alliance-Algorithm/livox_ros_driver2.git
