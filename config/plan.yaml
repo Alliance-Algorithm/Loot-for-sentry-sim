@@ -1,3 +1,5 @@
-events:
-  - "back_to_home"
-  - "cruise_battlefield"
+curise_methods:
+  occupation:
+    - [0.0, 0.0]
+  aggressive:
+    - [0.0, 0.0]

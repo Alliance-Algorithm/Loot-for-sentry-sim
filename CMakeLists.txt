@@ -28,48 +28,15 @@ find_package(ament_index_cpp REQUIRED)
 
 find_package(rmcs_executor REQUIRED)
 
-# file(GLOB_RECURSE PROJECT_SOURCE
-#     CONFIGURE_DEPENDS
-#     ${PROJECT_SOURCE_DIR}/src/*.cpp
-#     ${PROJECT_SOURCE_DIR}/src/*.cxx
-#     ${PROJECT_SOURCE_DIR}/src/*.cc
-# )
-# file(GLOB_RECURSE PROJECT_MODULE
-#     CONFIGURE_DEPENDS
-#     ${PROJECT_SOURCE_DIR}/src/*.cppm
-#     ${PROJECT_SOURCE_DIR}/src/*.cxxm
-#     ${PROJECT_SOURCE_DIR}/src/*.ccm
-# )
-# include_directories(
-#     src
-#     ${sensor_msgs_INCLUDE_DIRS}
-# )
-#
-# add_executable(
-#     app
-#     ${PROJECT_SOURCE}
-# )
-# target_sources(
-#     app
-#     PUBLIC FILE_SET CXX_MODULES FILES
-#         ${PROJECT_MODULE}
-# )
-# target_link_libraries(
-#     app
-#     rclcpp::rclcpp
-#     ${sensor_msgs_LIBRARIES}
-# )
-
 # RMCS Component
-add_library(${PROJECT_NAME}_brain SHARED)
+add_library(${PROJECT_NAME} SHARED)
 target_sources(
-    ${PROJECT_NAME}_brain
+    ${PROJECT_NAME}
     PRIVATE
-        src/brain.cc
-        src/brain/plan.cc
+        src/component/component.cc
 )
 target_include_directories(
-    ${PROJECT_NAME}_brain
+    ${PROJECT_NAME}
     PRIVATE
         ${PROJECT_SOURCE_DIR}/src/
         ${rmcs_executor_INCLUDE_DIRS}
@@ -78,7 +45,7 @@ target_include_directories(
         ${ament_index_cpp_INCLUDE_DIRS}
 )
 target_link_libraries(
-    ${PROJECT_NAME}_brain
+    ${PROJECT_NAME}
     rclcpp::rclcpp
     ament_index_cpp::ament_index_cpp
     yaml-cpp::yaml-cpp

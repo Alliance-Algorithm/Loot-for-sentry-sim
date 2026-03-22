@@ -26,10 +26,7 @@ class GoalTopicBridge(Node):
         )
         self.create_subscription(PoseStamped, "/goal_pose", self._on_goal, 10)
 
-        self.get_logger().info(
-            "goal topic bridge ready: /move_base_simple/goal "
-            "-> /navigate_to_pose"
-        )
+        self.get_logger().info("goal topic bridge ready")
 
     def _on_goal(self, msg: PoseStamped) -> None:
         threading.Thread(
