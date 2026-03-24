@@ -1,13 +1,19 @@
-#include "util/command.hh"
-#include "util/status.hh"
+#include "component/decision/plan.hh"
 
-#include <eigen3/Eigen/Geometry>
+#include <Eigen/Geometry>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+#include <filesystem>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 
 #include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
+
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
@@ -34,6 +40,34 @@ private:
     using Trigger = std_srvs::srv::Trigger;
     std::shared_ptr<rclcpp::Service<Trigger>> referee_status_service;
 
+    using NavigateToPose = nav2_msgs::action::NavigateToPose;
+    using NavigateToPoseClient = rclcpp_action::Client<NavigateToPose>;
+    std::shared_ptr<NavigateToPoseClient> client;
+
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
+
+    std::shared_ptr<rclcpp::TimerBase> plan_scheduler;
+
+    /// RMCS
+    std::chrono::steady_clock::time_point command_received_timestamp;
+    std::chrono::milliseconds timeout_interval{100};
+    std::atomic<bool> has_warning_timeout = false;
+
+    Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
+    OutputInterface<Eigen::Vector2d> command_chassis_velocity;
+    OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
+
+    InputInterface<rmcs_msgs::GameStage> game_stage;
+    InputInterface<std::uint16_t> robot_health;
+    InputInterface<std::uint16_t> robot_bullet;
+
+    /// DECISION
+    PlanBox plan_box;
+
+    Eigen::Vector2d last_goal_position = Eigen::Vector2d::Zero();
+
+private:
     template <typename... Args>
     auto info(std::format_string<Args...> fmt, Args&&... args) const {
         auto string = std::format(fmt, std::forward<Args>(args)...);
@@ -50,26 +84,6 @@ private:
         RCLCPP_ERROR(get_logger(), "%s", string.c_str());
     }
 
-    /// RMCS
-    std::chrono::steady_clock::time_point command_received_timestamp;
-    std::chrono::milliseconds timeout_interval{100};
-    std::atomic<bool> has_warning_timeout = false;
-
-    Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
-    OutputInterface<Eigen::Vector2d> command_chassis_velocity;
-    OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
-
-    InputInterface<rmcs_msgs::GameStage> game_stage;
-    InputInterface<std::uint16_t> robot_health;
-    InputInterface<std::uint16_t> robot_bullet;
-
-private:
-    auto set_gimbal_mode(GimbalMode mode) {
-        // TODO:
-        // 即 cmd_vel_smoothed 的方向
-        std::ignore = this;
-        std::ignore = mode;
-    }
     auto set_gimbal_scanning_area(double begin, double final) {
         // TODO:
         // 扫描模式下，云台不跟随前进方向，上下扫描，Yaw 按照给定角度扫描
@@ -77,6 +91,45 @@ private:
         std::ignore = this;
         std::ignore = begin;
         std::ignore = final;
+    }
+
+    auto check_current_position() const noexcept -> std::tuple<double, double> {
+        try {
+            const auto transform =
+                tf_buffer->lookupTransform("world", "base_link", rclcpp::Time{0});
+            return std::tuple{
+                transform.transform.translation.x,
+                transform.transform.translation.y,
+            };
+        } catch (const std::exception&) {
+            return std::tuple{kNan, kNan};
+        }
+    }
+
+    auto set_goal_position(double x, double y) {
+        if (std::isnan(x) || std::isnan(y)) {
+            return;
+        }
+        if (std::abs(last_goal_position.x() - x) < 1e-2
+            && std::abs(last_goal_position.y() - y) < 1e-2) {
+            return;
+        }
+        last_goal_position = Eigen::Vector2d{x, y};
+
+        client->async_cancel_all_goals();
+
+        auto goal = NavigateToPose::Goal{};
+        goal.pose.header.stamp = now();
+        goal.pose.header.frame_id = "world";
+        goal.pose.pose.position.x = x;
+        goal.pose.pose.position.y = y;
+        goal.pose.pose.position.z = 0.0;
+        goal.pose.pose.orientation.x = 0.0;
+        goal.pose.pose.orientation.y = 0.0;
+        goal.pose.pose.orientation.z = 0.0;
+        goal.pose.pose.orientation.w = 1.0;
+
+        client->async_send_goal(goal);
     }
 
     auto referee_status_service_callback(
@@ -89,7 +142,7 @@ private:
         };
 
         text("Referee Status");
-        text("-  stage: {}", rmcs_navigation::to_string(*game_stage));
+        text("-  stage: {}", rmcs_msgs::to_string(*game_stage));
         text("- health: {}", *robot_health);
         text("- bullet: {}", *robot_bullet);
 
@@ -108,28 +161,13 @@ private:
         has_warning_timeout = false;
     }
 
-    bool has_command_error = false;
-    auto subscription_command_callback(const std::unique_ptr<String>& msg) {
-        auto error_once = [this](const std::string& string) {
-            if (!has_command_error)
-                error("Nav command error: {}", string);
-            has_command_error = true;
-        };
-
-        try {
-            auto yaml = YAML::Load(msg->data);
-            auto command = Command{yaml};
-
-            set_gimbal_mode(command.gimbal_mode);
-
-        } catch (const std::exception& e) {
-            error_once(e.what());
-        }
-    }
-
 public:
     explicit Navigation()
         : rclcpp::Node{get_component_name()} {
+
+        tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
+        tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
+        client = rclcpp_action::create_client<NavigateToPose>(this, "/navigate_to_pose");
 
         // RMCS
         const auto vec_nan = Eigen::Vector2d{kNan, kNan};
@@ -145,15 +183,9 @@ public:
         Component::register_input("/referee/shooter/bullet_allowance", robot_bullet, true);
 
         // NAV2
-        publisher_status =
-            Node::create_publisher<String>(std::format("/{}/status", get_component_name()), 10);
-
         subscription_twist = Node::create_subscription<Twist>(
             "/cmd_vel_smoothed", 0,
             [this](const std::unique_ptr<Twist>& msg) { subscription_twist_callback(msg); });
-        subscription_command = Node::create_subscription<String>(
-            std::format("/{}/command", get_component_name()), 0,
-            [this](const std::unique_ptr<String>& msg) { subscription_command_callback(msg); });
 
         referee_status_service = Node::create_service<Trigger>(
             std::format("/{}/service/referee_status", get_component_name()),
@@ -163,10 +195,49 @@ public:
                 referee_status_service_callback(request, response);
             });
         command_received_timestamp = std::chrono::steady_clock::now();
+
+        // DECISION
+        // 从 config 中获取配置
+        auto name = get_parameter("config_name").as_string();
+        if (name.empty()) {
+            error("Parameter 'config_name' is empty, fallback to '{}'", name);
+            rclcpp::shutdown();
+        }
+
+        auto path = ament_index_cpp::get_package_share_directory("rmcs-navigation");
+        auto config_file = std::filesystem::path{path} / "config" / std::format("{}.yaml", name);
+        try {
+            auto config = YAML::LoadFile(config_file.string());
+            if (config["decision"]) {
+                plan_box.configure(config["decision"]);
+            } else {
+                plan_box.configure(config);
+            }
+            info("Loaded decision config: {}", config_file.string());
+        } catch (const std::exception& exception) {
+            error(
+                "Failed to load decision config '{}' : {}", config_file.string(), exception.what());
+        }
+
+        using namespace std::chrono_literals;
+        plan_scheduler = Node::create_wall_timer(100ms, [this] {
+            plan_box.update_information([this](PlanBox::Information& information) {
+                information.game_stage = *game_stage;
+
+                auto [x, y] = check_current_position();
+                information.current_x = x;
+                information.current_y = y;
+
+                information.health = *robot_health;
+                information.bullet = *robot_bullet;
+            });
+
+            auto [x, y] = plan_box.goal_position();
+            set_goal_position(x, y);
+        });
     }
 
     auto update() -> void override {
-
         using namespace std::chrono_literals;
         const auto interval = std::chrono::steady_clock::now() - command_received_timestamp;
         if (interval > timeout_interval) {

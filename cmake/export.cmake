@@ -4,8 +4,8 @@ install(
 )
 install(
     PROGRAMS
-        src/decision/goal_topic_bridge.py
-        src/decision/follow_waypoints_runner.py
+        src/script/goal_topic_bridge.py
+        src/script/follow_waypoints_runner.py
     DESTINATION lib/${PROJECT_NAME}/
 )
 install(

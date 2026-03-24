@@ -215,18 +215,15 @@ def generate_launch_description():
         "point_lio.launch.py",
     )
     nav2_launch = os.path.join(navigation_share, "launch", "nav2.launch.py")
-    nav2_config = _load_custom_config(
-        os.path.join(navigation_share, "config", "nav2.yaml")
+    custom_config = _load_custom_config(
+        os.path.join(navigation_share, "config", "custom.yaml")
     )
-    map_yaml_config = nav2_config.get("rmcs_navigation", {}).get(
-        "ros__parameters", {}
-    ).get("map_yaml", "maps/rmul.yaml")
-    local_map_yaml_config = nav2_config.get("rmcs_navigation", {}).get(
-        "ros__parameters", {}
-    ).get("local_map_yaml", "maps/local_mock.yaml")
-    local_map_mock_topic = nav2_config.get("rmcs_navigation", {}).get(
-        "ros__parameters", {}
-    ).get("local_map_mock_topic", "/local_map_mock")
+    nav_runtime_config = custom_config.get("navigation", {})
+    map_yaml_config = nav_runtime_config.get("map_yaml", "maps/rmul.yaml")
+    local_map_yaml_config = nav_runtime_config.get(
+        "local_map_yaml", "maps/local_mock.yaml")
+    local_map_mock_topic = nav_runtime_config.get(
+        "local_map_mock_topic", "/local_map_mock")
 
     if os.path.isabs(map_yaml_config):
         map_yaml = map_yaml_config
@@ -237,10 +234,6 @@ def generate_launch_description():
         local_map_yaml = local_map_yaml_config
     else:
         local_map_yaml = os.path.join(navigation_share, local_map_yaml_config)
-
-    custom_config = _load_custom_config(
-        os.path.join(navigation_share, "config", "custom.yaml")
-    )
 
     bag_config = custom_config.get("bag", {})
     bag_path_default = str(bag_config.get("path"))

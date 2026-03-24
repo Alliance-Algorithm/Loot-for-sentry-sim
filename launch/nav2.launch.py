@@ -18,7 +18,8 @@ def generate_launch_description():
     params_file = LaunchConfiguration("params_file")
     local_map_params_file = LaunchConfiguration("local_map_params_file")
     local_map_topic = LaunchConfiguration("local_map_topic")
-    local_map_transient_local = LaunchConfiguration("local_map_transient_local")
+    local_map_transient_local = LaunchConfiguration(
+        "local_map_transient_local")
     global_map_topic = LaunchConfiguration("global_map_topic")
     local_map_grid_frame = LaunchConfiguration("local_map_grid_frame")
     local_map_publish_cloud = LaunchConfiguration("local_map_publish_cloud")
