@@ -19,6 +19,7 @@ struct Config {
     std::uint16_t bullet_ready = 0;
 
     Point home{0.0, 0.0};
+    double cruise_interval = 0.0;
     std::unordered_map<std::string, std::vector<Point>> cruise_methods;
 
     Config() = default;
@@ -40,6 +41,7 @@ struct convert<rmcs_navigation::Config> {
         node["bullet_limit"] = rhs.bullet_limit;
         node["bullet_ready"] = rhs.bullet_ready;
         node["home"] = rhs.home;
+        node["cruise_interval"] = rhs.cruise_interval;
 
         auto cruise_methods = Node{NodeType::Map};
         for (const auto& [name, route] : rhs.cruise_methods) {
@@ -69,6 +71,9 @@ struct convert<rmcs_navigation::Config> {
         }
         if (const auto value = decision["home"]; value) {
             rhs.home = value.as<std::array<double, 2>>();
+        }
+        if (const auto value = decision["cruise_interval"]; value) {
+            rhs.cruise_interval = value.as<double>();
         }
 
         rhs.cruise_methods.clear();

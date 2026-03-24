@@ -2,6 +2,7 @@
 
 #include "component/util/pimpl.hh"
 
+#include <functional>
 #include <rmcs_msgs/game_stage.hpp>
 #include <yaml-cpp/yaml.h>
 
@@ -22,6 +23,8 @@ public:
 
     auto configure(const YAML::Node&) -> void;
 
+    auto set_printer(std::function<void(const std::string&)>) -> void;
+
     template <std::invocable<Information&> F>
     auto update_information(F&& function) noexcept -> void {
         std::forward<F>(function)(information_());
@@ -30,7 +33,7 @@ public:
 
     auto goal_position() noexcept -> std::tuple<double, double>;
 
-    auto rotation_chassis() const noexcept -> bool;
+    auto rotate_chassis() const noexcept -> bool;
 
     auto gimbal_scanning() const noexcept -> bool;
 

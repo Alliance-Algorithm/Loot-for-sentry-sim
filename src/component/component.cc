@@ -57,6 +57,9 @@ private:
     Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
     OutputInterface<Eigen::Vector2d> command_chassis_velocity;
     OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
+    OutputInterface<bool> rotate_chassis;
+    OutputInterface<bool> gimbal_scanning;
+    OutputInterface<bool> start_autoaim;
 
     InputInterface<rmcs_msgs::GameStage> game_stage;
     InputInterface<std::uint16_t> robot_health;
@@ -172,11 +175,12 @@ public:
         // RMCS
         const auto vec_nan = Eigen::Vector2d{kNan, kNan};
         Component::register_output(
-            std::format("/{}/chassis_velocity", get_component_name()), command_chassis_velocity,
-            vec_nan);
+            "/rmcs_navigation/chassis_velocity", command_chassis_velocity, vec_nan);
         Component::register_output(
-            std::format("/{}/gimbal_velocity", get_component_name()), command_gimbal_velocity,
-            vec_nan);
+            "/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, vec_nan);
+        Component::register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
+        Component::register_output("/rmcs_navigation/gimbal_scanning", gimbal_scanning, false);
+        Component::register_output("/rmcs_navigation/start_autoaim", start_autoaim, false);
 
         Component::register_input("/referee/game/stage", game_stage, true);
         Component::register_input("/referee/current_hp", robot_health, true);
@@ -234,7 +238,13 @@ public:
 
             auto [x, y] = plan_box.goal_position();
             set_goal_position(x, y);
+
+            if (plan_box.gimbal_scanning()) {}
+
+            if (plan_box.rotate_chassis()) {}
         });
+
+        plan_box.set_printer([this](const std::string& msg) { info("PlanBox: {}", msg); });
     }
 
     auto update() -> void override {
