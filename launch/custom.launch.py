@@ -76,6 +76,10 @@ def _build_mode_actions(
 
     # Basic Node
     use_local_mock = str(config["use_local_mock"]).lower()
+    if use_local_mock == "true":
+        use_local_mode = "false"
+    else:
+        use_local_mode = "true"
     nav2_actions = [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(nav2_launch),
@@ -86,7 +90,7 @@ def _build_mode_actions(
                 "local_map_transient_local": use_local_mock,
                 "global_map_topic": global_map_topic,
                 "use_lifecycle_manager": "true",
-                "enable_local_map_node": use_local_mock,
+                "enable_local_map_node": use_local_mode,
             }.items(),
         ),
         Node(
