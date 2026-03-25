@@ -98,16 +98,16 @@ def _build_actions(context):
                 {"node_names": ["map_server"]},
             ],
         ),
-        TimerAction(period=1.0, actions=nav2_actions),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(livox_launch),
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(point_lio_launch),
         ),
+        TimerAction(period=3.0, actions=nav2_actions),
         # 联盟赛初始坐标，以地图右下角 ROS 系为原点
         TimerAction(
-            period=1.0,
+            period=0.1,
             actions=[
                 Node(
                     package="tf2_ros",

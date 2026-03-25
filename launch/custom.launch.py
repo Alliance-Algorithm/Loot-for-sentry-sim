@@ -80,20 +80,6 @@ def _build_mode_actions(
         use_local_mode = "false"
     else:
         use_local_mode = "true"
-
-    if config["use_livox_driver"]:
-        result_actions.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(livox_launch),
-            )
-        )
-    if config["use_point_lio"]:
-        result_actions.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(point_lio_launch),
-            )
-        )
-
     nav2_actions = [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(nav2_launch),
@@ -160,8 +146,20 @@ def _build_mode_actions(
     ))
 
     result_actions.append(
-        TimerAction(period=2.0, actions=nav2_actions))
+        TimerAction(period=1.0, actions=nav2_actions))
 
+    if config["use_livox_driver"]:
+        result_actions.append(
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(livox_launch),
+            )
+        )
+    if config["use_point_lio"]:
+        result_actions.append(
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(point_lio_launch),
+            )
+        )
     if config["use_bag"]:
         bag_cmd = ["ros2", "bag", "play", bag_path]
         if bag_use_clock.lower() in {"1", "true", "yes", "on"}:
@@ -178,7 +176,7 @@ def _build_mode_actions(
     )
     result_actions.append(
         TimerAction(
-            period=1.0,
+            period=0.5,
             actions=[initial_world_link]
         )
     )
