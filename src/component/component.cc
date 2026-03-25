@@ -6,6 +6,7 @@
 #include <rmcs_msgs/robot_id.hpp>
 #include <rmcs_msgs/switch.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -82,6 +83,9 @@ private:
     InputInterface<uint32_t> blue_score;
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
+
+    std::chrono::steady_clock::time_point last_twist_timestamp;
+    bool has_last_twist_timestamp = false;
 
     /// DECISION
     PlanBox plan_box;
@@ -170,8 +174,26 @@ private:
     }
 
     auto subscription_twist_callback(const std::unique_ptr<Twist>& msg) {
-        command_chassis_velocity->x() = msg->linear.x;
-        command_chassis_velocity->y() = msg->linear.y;
+        auto compensated_x = msg->linear.x;
+        auto compensated_y = msg->linear.y;
+
+        auto timestamp_now = std::chrono::steady_clock::now();
+        if (has_last_twist_timestamp) {
+            auto dt = std::chrono::duration<double>(timestamp_now - last_twist_timestamp).count();
+            dt = std::clamp(dt, 0.0, 0.2);
+
+            auto delta_yaw = std::clamp(msg->angular.z * dt, -1.0, 1.0);
+
+            auto velocity = Eigen::Vector2d{msg->linear.x, msg->linear.y};
+            auto compensated_velocity = Eigen::Rotation2Dd{+delta_yaw} * velocity;
+            compensated_x = compensated_velocity.x();
+            compensated_y = compensated_velocity.y();
+        }
+        last_twist_timestamp = timestamp_now;
+        has_last_twist_timestamp = true;
+
+        command_chassis_velocity->x() = compensated_x;
+        command_chassis_velocity->y() = compensated_y;
 
         command_gimbal_velocity->x() = msg->angular.z;
         command_gimbal_velocity->y() = 0;

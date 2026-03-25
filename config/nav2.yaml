@@ -37,8 +37,8 @@ controller_server:
 
       max_vel_x: +4.0
       min_vel_x: -0.0
-      max_vel_y: +1.2
-      min_vel_y: -1.2
+      max_vel_y: +0.8
+      min_vel_y: -0.8
 
       max_vel_theta: +5.0
       min_vel_theta: -5.0
