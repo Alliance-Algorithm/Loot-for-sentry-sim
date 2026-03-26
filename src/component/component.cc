@@ -4,6 +4,8 @@
 #include "component/util/nod_task_queue.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 #include "component/util/switch_event_detector.hh"
+#include "component/util/tie.hh"
+#include "component/util/value_enter_detector.hh"
 
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/game_stage.hpp>
@@ -108,7 +110,7 @@ private:
     PlanBox plan_box;
 
     Eigen::Vector2d last_goal_position = Eigen::Vector2d::Zero();
-    rmcs_msgs::GameStage last_game_stage = rmcs_msgs::GameStage::UNKNOWN;
+    ValueEnterDetector<rmcs_msgs::GameStage> started_detector{rmcs_msgs::GameStage::STARTED};
 
     bool enable_fallback_mode = false;
 
@@ -141,13 +143,9 @@ private:
         auto goal = NavigateToPose::Goal{};
         goal.pose.header.stamp = now();
         goal.pose.header.frame_id = "world";
-        goal.pose.pose.position.x = x;
-        goal.pose.pose.position.y = y;
-        goal.pose.pose.position.z = 0.0;
-        goal.pose.pose.orientation.x = 0.0;
-        goal.pose.pose.orientation.y = 0.0;
-        goal.pose.pose.orientation.z = 0.0;
-        goal.pose.pose.orientation.w = 1.0;
+
+        util::tie(goal.pose.pose.position) = std::tuple{x, y, 0.0};
+        util::tie(goal.pose.pose.orientation) = std::tuple{0.0, 0.0, 0.0, 1.0};
 
         client->async_send_goal(goal);
         info("Goal position updated: ({}, {})", x, y);
@@ -261,7 +259,7 @@ private:
         nod_task_queue.push_delay(1s);
         nod_task_queue.push_task(1ms, {}, [this] {
             info("Nod sequence finished, restart navigation now");
-            navigation_restarter.start_async(navigation_config_name);
+            navigation_restarter.restart_async();
         });
     }
 
@@ -320,6 +318,7 @@ public:
             error("Parameter 'config_name' is empty, fallback to 'rmul'");
             rclcpp::shutdown();
         }
+        navigation_restarter.set_config_name(navigation_config_name);
 
         auto path = ament_index_cpp::get_package_share_directory("rmcs-navigation");
         auto config_file =
@@ -355,11 +354,8 @@ public:
             *command_gimbal_velocity = Eigen::Vector2d::Zero();
         }
 
-        using rmcs_msgs::GameStage;
-        using rmcs_msgs::Switch;
-        if ((last_game_stage != GameStage::STARTED) //
-            && (*game_stage == GameStage::STARTED)) {
-            if (*switch_right != Switch::UP) {
+        if (started_detector.spin(*game_stage)) {
+            if (*switch_right != rmcs_msgs::Switch::UP) {
                 enable_fallback_mode = true;
                 warn("Fallback mode detected, runing without navigation");
             }

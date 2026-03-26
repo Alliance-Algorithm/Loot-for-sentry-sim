@@ -19,7 +19,7 @@ auto setup_plan_box(rmcs::navigation::PlanBox& plan_box, double cruise_interval 
     config["cruise_methods"]["occupation"].push_back(std::array{5.0, 3.0});
     config["cruise_methods"]["occupation"].push_back(std::array{7.0, 3.0});
 
-    plan_box.configure(config);
+    std::ignore = plan_box.configure(config);
 }
 
 auto fetch_command(rmcs::navigation::PlanBox& plan_box) -> rmcs::navigation::PlanBox::Command {

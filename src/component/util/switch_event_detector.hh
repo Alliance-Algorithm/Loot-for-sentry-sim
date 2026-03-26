@@ -58,7 +58,7 @@ public:
     }
 
 private:
-    enum class Stage {
+    enum class Stage : std::uint8_t {
         Idle,
         SeenMiddleToUp,
     };

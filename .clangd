@@ -16,3 +16,5 @@ Diagnostics:
     - misc-include-cleaner
     - cppcoreguidelines-special-member-functions
     - readability-redundant-member-init
+    - bugprone-command-processor
+    - readability-else-after-return

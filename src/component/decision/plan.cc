@@ -255,8 +255,6 @@ struct PlanBox::Impl {
 
         old_info = new_info;
     }
-
-    auto command_() const noexcept -> const Command& { return command; }
 };
 
 PlanBox::PlanBox() noexcept
@@ -276,6 +274,6 @@ auto PlanBox::do_plan_() noexcept -> void { pimpl->do_plan(); }
 
 auto PlanBox::information_() noexcept -> Information& { return pimpl->new_info; }
 
-auto PlanBox::command_() noexcept -> const Command& { return pimpl->command_(); }
+auto PlanBox::command_() noexcept -> const Command& { return pimpl->command; }
 
 } // namespace rmcs::navigation
