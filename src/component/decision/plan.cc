@@ -1,5 +1,7 @@
 #include "component/decision/plan.hh"
 #include "component/decision/config.hh"
+#include "component/util/bool_edge_trigger.hh"
+#include "component/util/delayed_task_queue.hh"
 #include "component/util/fsm.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
@@ -11,50 +13,44 @@
 #include <experimental/scope>
 #include <format>
 #include <functional>
-#include <future>
 #include <utility>
+
+#include <rclcpp/utilities.hpp>
 
 namespace rmcs::navigation {
 
-constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
-
 struct PlanBox::Impl {
     enum class Mode : std::uint8_t {
-        Waiting,
-        ToTheHome,
-        Cruise,
+        WAITING,
+        TO_HOME,
+        CRUISE,
+        ATTACK,
+        RECOVERY,
         END,
     };
 
-    std::function<void(const std::string&)> printer = [](const std::string&) {};
-    std::string config_name;
+    Fsm<Mode> fsm{Mode::WAITING};
 
-    Information information;
+    Information new_info;
+    Information old_info;
+    Command command;
 
+    std::function<void(const std::string&)> logging = [](const std::string&) {};
     std::unique_ptr<Config> config;
 
-    rmcs::navigation::Fsm<Mode> fsm{Mode::Waiting};
-
-    double goal_x = kNan;
-    double goal_y = kNan;
-
-    bool rotate_chassis = false;
-    bool gimbal_scanning = false;
-
     // CONTEXT
-    rmcs_msgs::GameStage last_game_stage = rmcs_msgs::GameStage::UNKNOWN;
-
     std::size_t cruise_index = 0;
     std::string occupation_label = "occupation";
     std::string aggressive_label = "aggressive";
 
-    bool cruise_point_reached = false;
-    bool has_cruise_point_reached = false;
-    std::chrono::steady_clock::time_point cruise_reached_timestamp;
+    DelayedTaskQueue cruise_task_queue;
+    BoolEdgeTrigger cruise_reached_edge{std::chrono::milliseconds{500}};
+
+    bool need_recovery = false;
 
     auto configure(const YAML::Node& _config) -> std::expected<void, std::string> {
         config = std::make_unique<Config>(_config);
-        fsm.start_on(Mode::Waiting);
+        fsm.start_on(Mode::WAITING);
 
         auto& methods = config->cruise_methods;
         if (methods.empty()) {
@@ -72,140 +68,195 @@ struct PlanBox::Impl {
         return {};
     }
 
-    auto select_mode() const noexcept -> Mode {
-        using rmcs_msgs::GameStage;
-        auto game_stage = information.game_stage;
-
-        if (game_stage != GameStage::STARTED) {
-            return Mode::Waiting;
+    auto update_next_cruise_goal() {
+        const auto& method = occupation_label;
+        const auto& positions = config->cruise_methods[method];
+        if (positions.empty()) {
+            command.goal_x = kNan;
+            command.goal_y = kNan;
+            return;
         }
 
+        if (cruise_index >= positions.size()) {
+            cruise_index = 0;
+        }
+
+        auto [x, y] = positions.at(cruise_index);
+        command.goal_x = x;
+        command.goal_y = y;
+    }
+
+    auto select_mode() const noexcept -> Mode {
+        using rmcs_msgs::GameStage;
+        const auto& info = new_info;
+
+        // 比赛未开始，等待
+        if (info.game_stage != GameStage::STARTED) {
+            return Mode::WAITING;
+        }
         // 优势不在我，回家补给
         {
             auto situations = std::array{
-                information.health < config->health_limit,
-                information.bullet < config->bullet_limit,
+                info.health < config->health_limit,
+                info.bullet < config->bullet_limit,
             };
             if (std::ranges::any_of(situations, std::identity{})) {
-                return Mode::ToTheHome;
+                return need_recovery ? Mode::TO_HOME : Mode::RECOVERY;
             }
         }
-
+        // 已确认打击目标，站桩输出
+        {
+            if (std::isfinite(info.enemy_x) && std::isfinite(info.enemy_y)) {
+                return Mode::ATTACK;
+            }
+        }
         // 优势在我，进行巡航进攻
         {
             auto situations = std::array{
-                information.health >= config->health_ready,
-                information.bullet >= config->bullet_ready,
+                info.health >= config->health_ready,
+                info.bullet >= config->bullet_ready,
             };
             if (std::ranges::all_of(situations, std::identity{})) {
-                return Mode::Cruise;
+                return Mode::CRUISE;
             }
         }
 
-        return Mode::Waiting;
+        return Mode::WAITING;
     }
 
     Impl() noexcept {
+
         // 等待模式，啥也不做
-        fsm.use<Mode::Waiting>(
+        fsm.use<Mode::WAITING>(
             [this] {
-                goal_x = kNan;
-                goal_y = kNan;
+                cruise_reached_edge.reset();
 
-                rotate_chassis = false;
-                gimbal_scanning = false;
+                command.goal_x = kNan;
+                command.goal_y = kNan;
+                command.rotate_chassis = false;
+                command.enable_autoaim = false;
+                command.detect_targets = false;
 
-                printer("Start Waiting Mode");
+                logging("Start Waiting Mode");
             },
             [this] { return select_mode(); });
 
         // 回家
-        fsm.use<Mode::ToTheHome>(
+        fsm.use<Mode::TO_HOME>(
             [this] {
                 auto [x, y] = config->home;
-                goal_x = x;
-                goal_y = y;
+                command.goal_x = x;
+                command.goal_y = y;
 
-                rotate_chassis = true;
-                gimbal_scanning = false;
+                command.rotate_chassis = true;
+                command.enable_autoaim = true;
+                command.detect_targets = false;
 
-                printer("Start ToTheHome Mode");
+                logging("Start ToTheHome Mode");
             },
             [this] { return select_mode(); });
 
         // 巡航模式，小陀螺旋转，云台扫描
-        fsm.use<Mode::Cruise>(
+        fsm.use<Mode::CRUISE>(
             [this] {
                 cruise_index = 0;
-                cruise_reached_timestamp = std::chrono::steady_clock::now();
-                rotate_chassis = false;
-                gimbal_scanning = false;
-                cruise_point_reached = false;
+                cruise_task_queue.clear();
+                cruise_reached_edge.reset_edge_only(false);
 
-                printer("Start Cruise Mode");
+                command.rotate_chassis = false;
+                command.enable_autoaim = true;
+                command.detect_targets = false;
+
+                update_next_cruise_goal();
+                logging("Start Cruise Mode");
             },
             [this] {
-                auto& positions = config->cruise_methods[occupation_label];
-
-                if (cruise_index >= positions.size()) {
-                    cruise_index = 0;
-                }
-
-                auto update_goal = [this, &positions] {
-                    auto [x, y] = positions.at(cruise_index);
-                    goal_x = x;
-                    goal_y = y;
-                };
-                update_goal();
-
                 constexpr auto kTolerance = 0.1;
-                auto reached = std::abs(information.current_x - goal_x) < kTolerance
-                            && std::abs(information.current_y - goal_y) < kTolerance;
+                auto reached = std::abs(new_info.current_x - command.goal_x) < kTolerance
+                            && std::abs(new_info.current_y - command.goal_y) < kTolerance;
 
-                if (reached && cruise_point_reached == false) {
-                    cruise_point_reached = true;
-                    cruise_reached_timestamp = std::chrono::steady_clock::now();
-                }
-                if (reached == false) {
-                    cruise_point_reached = false;
-                }
+                auto now = std::chrono::steady_clock::now();
+                cruise_reached_edge.spin(reached, now);
 
-                // 自第一个巡航点开始，小陀螺不止
-                if (has_cruise_point_reached) {
-                    rotate_chassis = true;
-                }
+                if (cruise_reached_edge.consume_trigger()) {
+                    const auto interval = std::chrono::duration_cast<DelayedTaskQueue::Duration>(
+                        std::chrono::duration<double>{config->cruise_interval});
 
-                if (cruise_point_reached) {
-                    has_cruise_point_reached = true;
-                    gimbal_scanning = true;
-
-                    auto interval = config->cruise_interval;
-                    auto elapsed = std::chrono::duration<double>(
-                        std::chrono::steady_clock::now() - cruise_reached_timestamp);
-                    if (elapsed.count() >= interval) {
+                    cruise_task_queue.clear();
+                    cruise_task_queue.push(interval, [this] {
+                        auto& positions = config->cruise_methods[occupation_label];
                         cruise_index = (cruise_index + 1) % positions.size();
-                        cruise_point_reached = false;
-                        gimbal_scanning = false;
-                        update_goal();
-                        printer(std::format("Cruise point changed: ({}, {})", goal_x, goal_y));
-                    }
+
+                        update_next_cruise_goal();
+
+                        const auto [x, y] = std::tie(command.goal_x, command.goal_y);
+                        logging(std::format("Cruise point changed: ({}, {})", x, y));
+                    });
                 }
+
+                cruise_task_queue.spin(now);
+
+                const auto is_waiting = !cruise_task_queue.empty();
+                command.detect_targets = is_waiting;
+                command.enable_autoaim = is_waiting;
+
+                // 自第一个巡航点开始到程序结束，小陀螺不止
+                command.rotate_chassis = cruise_reached_edge.ever_triggered();
 
                 return select_mode();
             });
+
+        // 小陀螺站桩输出
+        fsm.use<Mode::ATTACK>(
+            [this] {
+                command.goal_x = kNan;
+                command.goal_y = kNan;
+                command.enable_autoaim = true;
+                command.detect_targets = false;
+                command.rotate_chassis = true;
+            },
+            [this] { return select_mode(); });
+
+        // 回家，但是只回家
+        fsm.use<Mode::RECOVERY>(
+            [this] {
+                const auto [x, y] = config->home;
+                command.goal_x = x;
+                command.goal_y = y;
+                command.enable_autoaim = false;
+                command.detect_targets = false;
+                command.rotate_chassis = false;
+            },
+            [this] {
+                if (new_info.health > config->health_limit) {
+                    need_recovery = false;
+                }
+                return select_mode();
+            });
+
+        if (!fsm.fully_registered()) {
+            logging("Fsm is not fully registerd");
+            rclcpp::shutdown();
+        }
     }
 
     auto do_plan() noexcept {
-        auto game_stage = information.game_stage;
-        if (game_stage != last_game_stage) {
-            printer(std::format("Stage: {} -> {}", last_game_stage, game_stage));
+        // 一些状态的切换沿检测
+        auto new_one = new_info.game_stage;
+        auto old_one = old_info.game_stage;
+        if (new_one != old_one) {
+            logging(std::format("Stage: {} -> {}", old_one, new_one));
         }
 
+        if (old_info.health == 0 && new_info.health != 0)
+            need_recovery = true;
+
         fsm.spin_once();
-        last_game_stage = information.game_stage;
+
+        old_info = new_info;
     }
 
-    auto goal_position() noexcept { return std::tuple{goal_x, goal_y}; }
+    auto command_() const noexcept -> const Command& { return command; }
 };
 
 PlanBox::PlanBox() noexcept
@@ -217,22 +268,14 @@ auto PlanBox::configure(const YAML::Node& config) -> std::expected<void, std::st
     return pimpl->configure(config);
 }
 
-auto PlanBox::set_printer(std::function<void(const std::string&)> printer) -> void {
-    pimpl->printer = std::move(printer);
+auto PlanBox::set_logging(std::function<void(const std::string&)> logging) -> void {
+    pimpl->logging = std::move(logging);
 }
-
-auto PlanBox::set_config_name(const std::string& name) -> void { pimpl->config_name = name; }
-
-auto PlanBox::goal_position() noexcept -> std::tuple<double, double> {
-    return pimpl->goal_position();
-}
-
-auto PlanBox::rotate_chassis() const noexcept -> bool { return pimpl->rotate_chassis; }
-
-auto PlanBox::gimbal_scanning() const noexcept -> bool { return pimpl->gimbal_scanning; }
 
 auto PlanBox::do_plan_() noexcept -> void { pimpl->do_plan(); }
 
-auto PlanBox::information_() noexcept -> Information& { return pimpl->information; }
+auto PlanBox::information_() noexcept -> Information& { return pimpl->new_info; }
+
+auto PlanBox::command_() noexcept -> const Command& { return pimpl->command_(); }
 
 } // namespace rmcs::navigation

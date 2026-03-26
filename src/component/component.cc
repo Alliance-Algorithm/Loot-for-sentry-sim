@@ -37,7 +37,7 @@
 
 namespace rmcs::navigation {
 
-constexpr auto kNan = std::numeric_limits<double>::quiet_NaN();
+constexpr auto kNanLocal = std::numeric_limits<double>::quiet_NaN();
 
 class Navigation
     : public rmcs_executor::Component
@@ -71,14 +71,14 @@ private:
     std::chrono::milliseconds timeout_interval{100};
     std::atomic<bool> has_warning_timeout = false;
 
-    Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
+    Eigen::Vector2d scanning_angle_speed = {kNanLocal, kNanLocal};
 
     // tx, ty, rx 用于导航，ry 用于点头事件
     OutputInterface<Eigen::Vector2d> command_chassis_velocity;
     OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
 
     OutputInterface<bool> command_rotate_chassis;
-    OutputInterface<bool> command_gimbal_scanning;
+    OutputInterface<bool> command_detect_targets;
     OutputInterface<bool> command_enable_autoaim;
 
     InputInterface<rmcs_msgs::GameStage> game_stage;
@@ -113,7 +113,7 @@ private:
     bool enable_fallback_mode = false;
 
 private:
-    auto set_gimbal_scanning_area(double begin, double final) {
+    auto set_detect_targets_area(double begin, double final) {
         // TODO:
         // 扫描模式下，云台不跟随前进方向，上下扫描，Yaw 按照给定角度扫描
         // Begin -> Final -> Begin -> ...
@@ -131,11 +131,11 @@ private:
                 transform.transform.translation.y,
             };
         } catch (const std::exception&) {
-            return std::tuple{kNan, kNan};
+            return std::tuple{kNanLocal, kNanLocal};
         }
     }
 
-    auto set_goal_position(double x, double y) {
+    auto update_goal_position(double x, double y) {
         client->async_cancel_all_goals();
 
         auto goal = NavigateToPose::Goal{};
@@ -205,7 +205,7 @@ private:
     auto spin_plan_box() {
         // 此为安全模式，不进行导航，原地旋转加扫描
         if (enable_fallback_mode) {
-            *command_gimbal_scanning = true;
+            *command_detect_targets = true;
             *command_rotate_chassis = true;
             *command_enable_autoaim = true;
             return;
@@ -214,39 +214,41 @@ private:
         auto position = check_current_position();
 
         using Information = PlanBox::Information;
-        plan_box.update_information([position, this](Information& information) {
-            information.game_stage = *game_stage;
+        plan_box.update_information([position, this](Information& info) {
+            info.game_stage = *game_stage;
 
             auto [x, y] = position;
-            information.current_x = x;
-            information.current_y = y;
+            info.current_x = x;
+            info.current_y = y;
 
-            information.health = *robot_health;
-            information.bullet = *robot_bullet;
+            info.enemy_x = kNan;
+            info.enemy_y = kNan;
+
+            info.health = *robot_health;
+            info.bullet = *robot_bullet;
         });
-
-        do {
-            auto [goal_x, goal_y] = plan_box.goal_position();
+        plan_box.fetch_command([this](const PlanBox::Command& command) {
+            auto [goal_x, goal_y] = std::tuple{command.goal_x, command.goal_y};
             // 非法目标点，跳过
-            if (std::isnan(goal_x) || std::isnan(goal_y)) {
-                break;
+            if (!std::isnan(goal_x) && !std::isnan(goal_y)) {
+                // 目标点相同且间隔在一定秒数内，跳过
+                constexpr auto kTolerance = 1e-2;
+                constexpr auto kInterval = std::chrono::seconds{5};
+                auto duplicated_goal = std::abs(last_goal_position.x() - goal_x) < kTolerance
+                                    && std::abs(last_goal_position.y() - goal_y) < kTolerance;
+                auto still_in_interval =
+                    std::chrono::steady_clock::now() - last_navigate_timestamp < kInterval;
+                if (!duplicated_goal || !still_in_interval) {
+                    update_goal_position(goal_x, goal_y);
+                    last_navigate_timestamp = std::chrono::steady_clock::now();
+                    last_goal_position = Eigen::Vector2d{goal_x, goal_y};
+                }
             }
-            // 目标点相同且间隔在一定秒数内，跳过
-            constexpr auto k_tolerance = 1e-2;
-            constexpr auto k_interval = std::chrono::seconds{5};
-            if (std::abs(last_goal_position.x() - goal_x) < k_tolerance
-                && std::abs(last_goal_position.y() - goal_y) < k_tolerance) {
-                if (std::chrono::steady_clock::now() - last_navigate_timestamp < k_interval)
-                    break;
-            }
-            set_goal_position(goal_x, goal_y);
 
-            last_navigate_timestamp = std::chrono::steady_clock::now();
-            last_goal_position = Eigen::Vector2d{goal_x, goal_y};
-        } while (false);
-
-        *command_gimbal_scanning = plan_box.gimbal_scanning();
-        *command_rotate_chassis = plan_box.rotate_chassis();
+            *command_detect_targets = command.detect_targets;
+            *command_rotate_chassis = command.rotate_chassis;
+            *command_enable_autoaim = command.enable_autoaim;
+        });
     }
 
     auto enqueue_nod_sequence() -> void {
@@ -274,7 +276,7 @@ public:
         client = rclcpp_action::create_client<NavigateToPose>(this, "/navigate_to_pose");
 
         // RMCS
-        const auto kNanVec = Eigen::Vector2d{kNan, kNan};
+        const auto kNanVec = Eigen::Vector2d{kNanLocal, kNanLocal};
         Component::register_output(
             "/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
         Component::register_output(
@@ -282,7 +284,7 @@ public:
         Component::register_output(
             "/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
         Component::register_output(
-            "/rmcs_navigation/gimbal_scanning", command_gimbal_scanning, false);
+            "/rmcs_navigation/detect_targets", command_detect_targets, false);
         Component::register_output(//
             "/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
 
@@ -311,7 +313,7 @@ public:
 
         // DECISION
         // 从 config 中获取配置
-        plan_box.set_printer([this](const std::string& msg) { info("PlanBox: {}", msg); });
+        plan_box.set_logging([this](const std::string& msg) { info("PlanBox: {}", msg); });
 
         navigation_config_name = get_parameter_or<std::string>("config_name", "rmul");
         if (navigation_config_name.empty()) {

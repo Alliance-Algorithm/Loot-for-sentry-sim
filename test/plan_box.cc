@@ -20,7 +20,13 @@ auto setup_plan_box(rmcs::navigation::PlanBox& plan_box, double cruise_interval 
     config["cruise_methods"]["occupation"].push_back(std::array{7.0, 3.0});
 
     plan_box.configure(config);
-    plan_box.set_config_name("rmul");
+}
+
+auto fetch_command(rmcs::navigation::PlanBox& plan_box) -> rmcs::navigation::PlanBox::Command {
+    auto command = rmcs::navigation::PlanBox::Command{};
+    plan_box.fetch_command(
+        [&](const rmcs::navigation::PlanBox::Command& value) { command = value; });
+    return command;
 }
 
 auto update(
@@ -52,11 +58,11 @@ TEST(PlanBox, KeepWaitingWhenResourcesAreBetweenThresholds) {
     update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 200, 20);
     update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 200, 20);
 
-    auto [goal_x, goal_y] = plan_box.goal_position();
-    EXPECT_TRUE(std::isnan(goal_x));
-    EXPECT_TRUE(std::isnan(goal_y));
-    EXPECT_FALSE(plan_box.rotate_chassis());
-    EXPECT_FALSE(plan_box.gimbal_scanning());
+    auto command = fetch_command(plan_box);
+    EXPECT_TRUE(std::isnan(command.goal_x));
+    EXPECT_TRUE(std::isnan(command.goal_y));
+    EXPECT_FALSE(command.rotate_chassis);
+    EXPECT_FALSE(command.detect_targets);
 }
 
 TEST(PlanBox, GoHomeWhenResourcesAreLow) {
@@ -67,11 +73,11 @@ TEST(PlanBox, GoHomeWhenResourcesAreLow) {
     update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 50, 20);
     update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 50, 20);
 
-    auto [goal_x, goal_y] = plan_box.goal_position();
-    EXPECT_NEAR(goal_x, 1.2, 1e-6);
-    EXPECT_NEAR(goal_y, 6.3, 1e-6);
-    EXPECT_TRUE(plan_box.rotate_chassis());
-    EXPECT_FALSE(plan_box.gimbal_scanning());
+    auto command = fetch_command(plan_box);
+    EXPECT_NEAR(command.goal_x, 1.2, 1e-6);
+    EXPECT_NEAR(command.goal_y, 6.3, 1e-6);
+    EXPECT_TRUE(command.rotate_chassis);
+    EXPECT_FALSE(command.detect_targets);
 }
 
 TEST(PlanBox, CruiseEnablesScanningThenRotationAfterFirstPointReached) {
@@ -82,19 +88,21 @@ TEST(PlanBox, CruiseEnablesScanningThenRotationAfterFirstPointReached) {
     update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 400, 80);
     update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 400, 80);
 
-    auto [goal_x, goal_y] = plan_box.goal_position();
-    EXPECT_NEAR(goal_x, 5.0, 1e-6);
-    EXPECT_NEAR(goal_y, 3.0, 1e-6);
-    EXPECT_FALSE(plan_box.gimbal_scanning());
-    EXPECT_FALSE(plan_box.rotate_chassis());
+    auto command = fetch_command(plan_box);
+    EXPECT_NEAR(command.goal_x, 5.0, 1e-6);
+    EXPECT_NEAR(command.goal_y, 3.0, 1e-6);
+    EXPECT_FALSE(command.detect_targets);
+    EXPECT_FALSE(command.rotate_chassis);
 
     update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
-    EXPECT_TRUE(plan_box.gimbal_scanning());
-    EXPECT_FALSE(plan_box.rotate_chassis());
+    command = fetch_command(plan_box);
+    EXPECT_TRUE(command.detect_targets);
+    EXPECT_TRUE(command.rotate_chassis);
 
     update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
-    EXPECT_TRUE(plan_box.gimbal_scanning());
-    EXPECT_TRUE(plan_box.rotate_chassis());
+    command = fetch_command(plan_box);
+    EXPECT_TRUE(command.detect_targets);
+    EXPECT_TRUE(command.rotate_chassis);
 }
 
 TEST(PlanBox, CruiseSwitchesToNextPointAfterOneSecondInterval) {
@@ -111,16 +119,50 @@ TEST(PlanBox, CruiseSwitchesToNextPointAfterOneSecondInterval) {
 
     std::this_thread::sleep_for(900ms);
     update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
-    auto [before_x, before_y] = plan_box.goal_position();
-    EXPECT_NEAR(before_x, 5.0, 1e-6);
-    EXPECT_NEAR(before_y, 3.0, 1e-6);
+    auto command = fetch_command(plan_box);
+    EXPECT_NEAR(command.goal_x, 5.0, 1e-6);
+    EXPECT_NEAR(command.goal_y, 3.0, 1e-6);
 
     std::this_thread::sleep_for(200ms);
     update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
-    auto [after_x, after_y] = plan_box.goal_position();
-    EXPECT_NEAR(after_x, 7.0, 1e-6);
-    EXPECT_NEAR(after_y, 3.0, 1e-6);
-    EXPECT_FALSE(plan_box.gimbal_scanning());
+    command = fetch_command(plan_box);
+    EXPECT_NEAR(command.goal_x, 7.0, 1e-6);
+    EXPECT_NEAR(command.goal_y, 3.0, 1e-6);
+    EXPECT_FALSE(command.detect_targets);
+}
+
+TEST(PlanBox, CruiseJitterDoesNotTriggerMultipleTasks) {
+    using namespace std::chrono_literals;
+
+    auto plan_box = rmcs::navigation::PlanBox{};
+    setup_plan_box(plan_box, 1.0);
+    enter_started_stage(plan_box);
+
+    // Initial cruise state
+    update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 400, 80);
+
+    // Reach point
+    update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
+    auto command = fetch_command(plan_box);
+    EXPECT_NEAR(command.goal_x, 5.0, 1e-6);
+
+    // Jitter: leave and re-enter point within merge window (500ms)
+    std::this_thread::sleep_for(100ms);
+    update(plan_box, rmcs_msgs::GameStage::STARTED, 0.0, 0.0, 400, 80);
+    std::this_thread::sleep_for(100ms);
+    update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
+
+    // Should still be waiting for the first interval, haven't switched yet
+    command = fetch_command(plan_box);
+    EXPECT_NEAR(command.goal_x, 5.0, 1e-6);
+
+    // Wait for interval to finish
+    std::this_thread::sleep_for(900ms);
+    update(plan_box, rmcs_msgs::GameStage::STARTED, 5.0, 3.0, 400, 80);
+    command = fetch_command(plan_box);
+
+    // Should have switched to next point
+    EXPECT_NEAR(command.goal_x, 7.0, 1e-6);
 }
 
 } // namespace

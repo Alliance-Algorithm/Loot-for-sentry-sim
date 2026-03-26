@@ -20,6 +20,8 @@ find_package(rmcs_msgs REQUIRED)
 
 ament_add_gtest(fsm_test fsm.cc)
 
+ament_add_gtest(bool_edge_trigger_test bool_edge_trigger.cc)
+
 ament_add_gtest(
     plan_box_test
     plan_box.cc

@@ -14,3 +14,5 @@ Diagnostics:
     - missing-includes
     - readability-identifier-naming
     - misc-include-cleaner
+    - cppcoreguidelines-special-member-functions
+    - readability-redundant-member-init
