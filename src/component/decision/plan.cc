@@ -171,7 +171,7 @@ struct PlanBox::Impl {
                 logging("Start Cruise Mode");
             },
             [this] {
-                constexpr auto kTolerance = 0.1;
+                constexpr auto kTolerance = 0.5;
                 auto reached = std::abs(new_info.current_x - command.goal_x) < kTolerance
                             && std::abs(new_info.current_y - command.goal_y) < kTolerance;
 

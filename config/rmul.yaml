@@ -2,7 +2,7 @@ navigation:
   map_yaml: maps/rmul.yaml
 
 decision:
-  health_limit: 150
+  health_limit: 250
   health_ready: 350
   bullet_limit: 0
   bullet_ready: 0

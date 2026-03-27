@@ -30,15 +30,15 @@
 #include <Eigen/Geometry>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <rclcpp/node.hpp>
+#include <rclcpp/publisher.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rclcpp/utilities.hpp>
-#include <rclcpp_action/rclcpp_action.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <yaml-cpp/yaml.h>
 
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
-#include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
@@ -62,13 +62,11 @@ private:
     std::shared_ptr<rclcpp::Subscription<String>> subscription_command;
 
     std::shared_ptr<rclcpp::Publisher<String>> publisher_status;
+    std::shared_ptr<rclcpp::Publisher<geometry_msgs::msg::PoseStamped>> publisher_goal;
 
     using Trigger = std_srvs::srv::Trigger;
     std::shared_ptr<rclcpp::Service<Trigger>> referee_status_service;
 
-    using NavigateToPose = nav2_msgs::action::NavigateToPose;
-    using NavigateToPoseClient = rclcpp_action::Client<NavigateToPose>;
-    std::shared_ptr<NavigateToPoseClient> client;
     std::chrono::steady_clock::time_point last_navigate_timestamp;
 
     std::unique_ptr<tf2_ros::Buffer> tf_buffer;
@@ -175,16 +173,14 @@ private:
     }
 
     auto update_goal_position(double x, double y) {
-        client->async_cancel_all_goals();
+        auto goal = geometry_msgs::msg::PoseStamped{};
+        goal.header.stamp = now();
+        goal.header.frame_id = "world";
 
-        auto goal = NavigateToPose::Goal{};
-        goal.pose.header.stamp = now();
-        goal.pose.header.frame_id = "world";
+        util::tie(goal.pose.position) = std::tuple{x, y, 0.0};
+        util::tie(goal.pose.orientation) = std::tuple{0.0, 0.0, 0.0, 1.0};
 
-        util::tie(goal.pose.pose.position) = std::tuple{x, y, 0.0};
-        util::tie(goal.pose.pose.orientation) = std::tuple{0.0, 0.0, 0.0, 1.0};
-
-        client->async_send_goal(goal);
+        publisher_goal->publish(goal);
         info("Goal position updated: ({}, {})", x, y);
     }
 
@@ -316,7 +312,8 @@ public:
 
         tf_buffer = std::make_unique<tf2_ros::Buffer>(get_clock());
         tf_listener = std::make_shared<tf2_ros::TransformListener>(*tf_buffer);
-        client = rclcpp_action::create_client<NavigateToPose>(this, "/navigate_to_pose");
+        publisher_goal =
+            Node::create_publisher<geometry_msgs::msg::PoseStamped>("/move_base_simple/goal", 10);
 
         // RMCS
         const auto kNanVec = Eigen::Vector2d{kNanLocal, kNanLocal};
