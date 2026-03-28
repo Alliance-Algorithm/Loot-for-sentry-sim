@@ -177,7 +177,7 @@ ros2 run tf2_ros tf2_echo aft_mapped base_link
 本包导出 pluginlib 组件（见 `plugins.xml`），由 `rmcs_executor` 在机器人配置中加载。组件核心输出接口：
 
 - `/rmcs_navigation/chassis_velocity`
-- `/rmcs_navigation/gimbal_velocity`
+- `/rmcs_navigation/nod_count`（递增计数，控制器按增量执行点头次数）
 - `/rmcs_navigation/rotate_chassis`
 - `/rmcs_navigation/detect_targets`
 - `/rmcs_navigation/start_autoaim`

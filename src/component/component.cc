@@ -1,7 +1,6 @@
 #include "component/decision/plan.hh"
 #include "component/util/logger_mixin.hh"
 #include "component/util/navigation_screen.hh"
-#include "component/util/nod_task_queue.hh"
 #include "component/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 #include "component/util/switch_event_detector.hh"
 #include "component/util/tie.hh"
@@ -12,7 +11,6 @@
 #include <rmcs_msgs/robot_id.hpp>
 #include <rmcs_msgs/switch.hpp>
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -72,15 +70,14 @@ private:
     std::shared_ptr<rclcpp::TimerBase> plan_scheduler;
 
     /// RMCS
+
     std::chrono::steady_clock::time_point command_received_timestamp;
     std::chrono::milliseconds timeout_interval{100};
     std::atomic<bool> has_warning_timeout = false;
 
-    Eigen::Vector2d scanning_angle_speed = {kNan, kNan};
-
     // tx, ty, rx 用于导航，ry 用于点头事件
     OutputInterface<Eigen::Vector2d> command_chassis_velocity;
-    OutputInterface<Eigen::Vector2d> command_gimbal_velocity;
+    OutputInterface<std::size_t> command_nod_count;
 
     OutputInterface<bool> command_rotate_chassis;
     OutputInterface<bool> command_detect_targets;
@@ -136,16 +133,7 @@ private:
     std::string navigation_config_name = "rmul";
 
     NavigationScreen screen{[this](const std::string& msg) { this->info("{}", msg); }};
-
-    NodTaskQueue nod_task_queue{[this](double pitch_velocity) {
-        if (command_gimbal_velocity.active()) {
-            command_gimbal_velocity->y() = pitch_velocity;
-        }
-    }};
     SwitchEventDetector right_switch_detector{context.switch_right};
-
-    std::chrono::steady_clock::time_point last_twist_timestamp;
-    bool has_last_twist_timestamp = false;
 
     /// DECISION
     PlanBox plan_box;
@@ -209,32 +197,11 @@ private:
         if (*context.switch_right != rmcs_msgs::Switch::UP) {
             command_chassis_velocity->x() = 0;
             command_chassis_velocity->y() = 0;
-            command_gimbal_velocity->x() = 0;
             return;
         }
 
-        auto compensated_x = msg->linear.x;
-        auto compensated_y = msg->linear.y;
-
-        auto timestamp_now = std::chrono::steady_clock::now();
-        if (has_last_twist_timestamp) {
-            auto dt = std::chrono::duration<double>(timestamp_now - last_twist_timestamp).count();
-            dt = std::clamp(dt, 0.0, 0.2);
-
-            auto delta_yaw = std::clamp(msg->angular.z * dt, -1.0, 1.0);
-
-            auto velocity = Eigen::Vector2d{msg->linear.x, msg->linear.y};
-            auto compensated_velocity = Eigen::Rotation2Dd{+delta_yaw} * velocity;
-            compensated_x = compensated_velocity.x();
-            compensated_y = compensated_velocity.y();
-        }
-        last_twist_timestamp = timestamp_now;
-        has_last_twist_timestamp = true;
-
-        command_chassis_velocity->x() = compensated_x;
-        command_chassis_velocity->y() = compensated_y;
-
-        command_gimbal_velocity->x() = msg->angular.z;
+        command_chassis_velocity->x() = msg->linear.x;
+        command_chassis_velocity->y() = msg->linear.y;
 
         command_received_timestamp = std::chrono::steady_clock::now();
         has_warning_timeout = false;
@@ -265,7 +232,11 @@ private:
             info.enemy_y = kNan;
 
             info.health = *context.robot_health;
-            info.bullet = *context.robot_bullet;
+
+            // @FIXME:
+            //  联盟赛不考虑弹药
+            info.bullet = 1'000;
+            // info.bullet = *context.robot_bullet;
         });
         plan_box.fetch_command([this](const PlanBox::Command& command) {
             auto [goal_x, goal_y] = std::tuple{command.goal_x, command.goal_y};
@@ -291,23 +262,6 @@ private:
         });
     }
 
-    auto enqueue_nod_sequence() -> void {
-        using namespace std::chrono_literals;
-
-        if (!nod_task_queue.empty())
-            return;
-
-        nod_task_queue.push_delay(300ms);
-        for (auto i = 0; i < 2; ++i) {
-            nod_task_queue.nod_once(0.8, 220ms);
-        }
-        nod_task_queue.push_delay(1s);
-        nod_task_queue.push_task(1ms, {}, [this] {
-            info("Nod sequence finished, restart navigation now");
-            screen.restart_async();
-        });
-    }
-
 public:
     explicit Navigation()
         : rclcpp::Node{
@@ -322,7 +276,7 @@ public:
         // RMCS
         const auto kNanVec = Eigen::Vector2d{kNan, kNan};
         register_output("/rmcs_navigation/chassis_velocity", command_chassis_velocity, kNanVec);
-        register_output("/rmcs_navigation/gimbal_velocity", command_gimbal_velocity, kNanVec);
+        register_output("/rmcs_navigation/nod_count", command_nod_count, 0);
         register_output("/rmcs_navigation/rotate_chassis", command_rotate_chassis, false);
         register_output("/rmcs_navigation/detect_targets", command_detect_targets, false);
         register_output("/rmcs_navigation/start_autoaim", command_enable_autoaim, false);
@@ -404,7 +358,6 @@ public:
                 warn("Lost navigation control, reset command velocity now");
             }
             *command_chassis_velocity = Eigen::Vector2d::Zero();
-            *command_gimbal_velocity = Eigen::Vector2d::Zero();
         }
 
         if (started_detector.spin(*context.game_stage)) {
@@ -416,10 +369,9 @@ public:
 
         if (right_switch_detector.spin(now)) {
             info("Right switch trigger detected, enqueue nod sequence");
-            enqueue_nod_sequence();
+            *command_nod_count += 2;
+            screen.restart_async();
         }
-
-        nod_task_queue.spin(now);
 
         // .....
     }
