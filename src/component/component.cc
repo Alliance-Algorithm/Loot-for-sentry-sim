@@ -72,7 +72,7 @@ private:
     /// RMCS
 
     std::chrono::steady_clock::time_point command_received_timestamp;
-    std::chrono::milliseconds timeout_interval{100};
+    std::chrono::seconds timeout_interval{2};
     std::atomic<bool> has_warning_timeout = false;
 
     // tx, ty, rx 用于导航，ry 用于点头事件
@@ -181,7 +181,7 @@ private:
 
         text("Referee Status");
         text("-     id: {}", *context.robot_id);
-        text("-  stage: {}", rmcs_msgs::to_string(*context.game_stage));
+        text("-  stage: {}", *context.game_stage);
         text("- health: {}", *context.robot_health);
         text("- bullet: {}", *context.robot_bullet);
         // text("- bscore: {}", *blue_score);
@@ -194,6 +194,9 @@ private:
     auto subscription_twist_callback(const std::unique_ptr<Twist>& msg) {
         auto lock = std::scoped_lock{io_mutex};
 
+        command_received_timestamp = std::chrono::steady_clock::now();
+        has_warning_timeout = false;
+
         if (*context.switch_right != rmcs_msgs::Switch::UP) {
             command_chassis_velocity->x() = 0;
             command_chassis_velocity->y() = 0;
@@ -202,9 +205,6 @@ private:
 
         command_chassis_velocity->x() = msg->linear.x;
         command_chassis_velocity->y() = msg->linear.y;
-
-        command_received_timestamp = std::chrono::steady_clock::now();
-        has_warning_timeout = false;
     }
 
     auto spin_plan_box() {
@@ -364,6 +364,9 @@ public:
             if (*context.switch_right == rmcs_msgs::Switch::MIDDLE) {
                 enable_fallback_mode = true;
                 warn("Fallback mode detected, runing without navigation");
+            } else {
+                enable_fallback_mode = false;
+                info("Game start, runing with navigation");
             }
         }
 

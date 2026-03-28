@@ -196,12 +196,13 @@ struct PlanBox::Impl {
                 }
                 cruise_task_queue.spin(now);
 
-                // 只有在点内才开始扫描，切换巡航点不扫描
-                const auto is_detecting = !cruise_task_queue.empty();
-                command.detect_targets = is_detecting;
+                // (Removed) 只有在点内才开始扫描，切换巡航点不扫描
+                // const auto is_detecting = !cruise_task_queue.empty();
+                // command.detect_targets = is_detecting;
 
-                // 自第一个巡航点开始到程序结束，小陀螺不止
+                // 自第一个巡航点开始到程序结束，小陀螺和扫描不止
                 command.rotate_chassis = cruise_reached_edge.ever_triggered();
+                command.detect_targets = cruise_reached_edge.ever_triggered();
 
                 return select_mode();
             });
