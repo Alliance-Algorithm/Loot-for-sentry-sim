@@ -1,14 +1,15 @@
+#if defined(__clang__)
+# pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
+#include "cxx/context.hh"
 #include "cxx/util/logger_mixin.hh"
 #include "cxx/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
 #include <rmcs_executor/component.hpp>
-#include <rmcs_msgs/game_stage.hpp>
-#include <rmcs_msgs/robot_id.hpp>
-#include <rmcs_msgs/switch.hpp>
 
-#include <cstdint>
-#include <exception>
-#include <expected>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -21,8 +22,6 @@
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
 #include <sol/sol.hpp>
-#include <std_msgs/msg/string.hpp>
-#include <yaml-cpp/yaml.h>
 
 namespace rmcs::navigation {
 
@@ -44,90 +43,7 @@ private:
     sol::protected_function lua_on_tick;
     sol::protected_function lua_control_speed_callback;
 
-    struct Context {
-        InputInterface<rmcs_msgs::GameStage> game_stage;
-        InputInterface<rmcs_msgs::RobotId> robot_id;
-        InputInterface<std::uint16_t> robot_health;
-        InputInterface<std::uint16_t> robot_bullet;
-        InputInterface<std::uint32_t> red_score;
-        InputInterface<std::uint32_t> blue_score;
-        InputInterface<rmcs_msgs::Switch> switch_right;
-        InputInterface<rmcs_msgs::Switch> switch_left;
-
-        explicit Context(Navigation& self) noexcept
-            : self(self) {}
-
-        auto init(bool mock = false) -> void {
-            make("/referee/id", robot_id, mock);
-            make("/remote/switch/right", switch_right, mock);
-            make("/remote/switch/left", switch_left, mock);
-            make("/referee/game/stage", game_stage, mock);
-            make("/referee/current_hp", robot_health, mock);
-            make("/referee/shooter/bullet_allowance", robot_bullet, mock);
-            make("/referee/game/red_score", red_score, mock);
-            make("/referee/game/blue_score", blue_score, mock);
-
-            if (mock) {
-                constexpr auto topic = "/rmcs_navigation/context/mock";
-                subscription = self.create_subscription<std_msgs::msg::String>(
-                    topic, 10, [this](const std::unique_ptr<std_msgs::msg::String>& msg) {
-                        auto lock = std::scoped_lock{self.io_mutex};
-                        if (auto result = from(msg->data); !result)
-                            self.fuck("Context mock failed: {}", result.error());
-                    });
-            }
-        }
-        auto from(const std::string& raw) noexcept -> std::expected<void, std::string> {
-            try {
-                auto data = DataHelper{raw};
-                if (!data.root.IsMap())
-                    return std::unexpected{"context yaml root must be a map"};
-
-                data.try_sync(game_stage, "game_stage");
-                data.try_sync(robot_health, "robot_health");
-                data.try_sync(robot_bullet, "robot_bullet");
-                data.try_sync(red_score, "red_score");
-                data.try_sync(blue_score, "blue_score");
-
-                return {};
-            } catch (const std::exception& exception) {
-                return std::unexpected{exception.what()};
-            }
-        }
-
-    private:
-        struct DataHelper final {
-            YAML::Node root;
-            explicit DataHelper(const std::string& raw)
-                : root{YAML::Load(raw)} {}
-
-            template <typename T>
-            auto try_sync(InputInterface<T>& input, const std::string& name) -> void {
-                if (const auto data = root[name]) {
-                    auto& to_sync = const_cast<T&>(*input);
-                    /*^^*/ if constexpr (std::is_enum_v<T>) {
-                        using U = std::underlying_type_t<T>;
-                        to_sync = static_cast<T>(data.as<U>());
-                    } else if constexpr (std::is_constructible_v<T, std::uint8_t>) {
-                        to_sync = T{data.as<std::uint8_t>()};
-                    } else {
-                        to_sync = data.as<T>();
-                    }
-                }
-            }
-        };
-
-        Navigation& self;
-        std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>> subscription;
-
-        template <typename T>
-        auto make(const std::string& name, InputInterface<T>& input, bool mock = false) -> void {
-            if (mock)
-                input.make_and_bind_directly();
-            else
-                self.register_input(name, input, true);
-        }
-    } context;
+    Context context;
 
     struct Command {
         OutputInterface<Eigen::Vector2d> chassis_velocity;
@@ -246,12 +162,12 @@ private:
 public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), option()}
-        , context{*this} {
+        , context{*this, *this} {
         print_icon();
 
         mock_context = get_parameter_or("mock_context", false);
 
-        context.init(mock_context);
+        context.init(io_mutex, mock_context);
         command.init(*this);
 
         lua_init();

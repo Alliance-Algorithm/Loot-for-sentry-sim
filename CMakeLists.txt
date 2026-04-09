@@ -49,6 +49,7 @@ target_compile_features(
 target_sources(
     ${PROJECT_NAME}
     PRIVATE
+        src/cxx/context.cc
         src/cxx/component.cc
 )
 target_include_directories(

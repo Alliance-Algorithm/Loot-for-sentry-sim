@@ -1,5 +1,9 @@
 local util = require("util.native")
 
+---
+--- Cxx Impl
+---
+
 --- @class Api
 ---
 --- @field info fun(message: string)
@@ -22,6 +26,10 @@ local api = setmetatable({}, {
 		end
 	end,
 })
+
+---
+--- Native Impl
+---
 
 function api.restart_navigation(config)
 	local screen_label = "rmcs-navigation"
