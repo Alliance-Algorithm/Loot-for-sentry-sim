@@ -1,0 +1,73 @@
+name: rmcs-navigation CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  RMCS_REPO: https://github.com/Alliance-Algorithm/RMCS.git
+  RMCS_REF: main
+
+jobs:
+  lua-test:
+    runs-on: ubuntu-latest
+    container:
+      image: qzhhhi/rmcs-develop:latest
+    steps:
+      - name: Checkout rmcs-navigation
+        uses: actions/checkout@v4
+
+      - name: Run Lua tests directly
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          skip_lua_tests=(
+            "util.lua"
+            "restart_navigation.lua"
+          )
+          for test_file in test/lua/*.lua; do
+            test_name="$(basename "${test_file}")"
+
+            should_skip=false
+            for skip_name in "${skip_lua_tests[@]}"; do
+              if [[ "${test_name}" == "${skip_name}" ]]; then
+                should_skip=true
+                break
+              fi
+            done
+            if [[ "${should_skip}" == true ]]; then
+              continue
+            fi
+
+            lua "${test_file}"
+          done
+
+  cxx-build:
+    runs-on: ubuntu-latest
+    container:
+      image: qzhhhi/rmcs-develop:latest
+    steps:
+      - name: Checkout rmcs-navigation
+        uses: actions/checkout@v4
+
+      - name: Clone RMCS workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${RMCS_REF}" "${RMCS_REPO}" /tmp/RMCS
+          mkdir -p /tmp/RMCS/rmcs_ws/src/skills/rmcs-navigation
+          tar -C "${GITHUB_WORKSPACE}" --exclude=".git" -cf - . \
+            | tar -C /tmp/RMCS/rmcs_ws/src/skills/rmcs-navigation -xf -
+
+      - name: Build rmcs-navigation with colcon
+        shell: bash
+        working-directory: /tmp/RMCS/rmcs_ws
+        run: |
+          set -euo pipefail
+          source /opt/ros/jazzy/setup.bash
+          export PATH="/opt/cmake/bin:${PATH}"
+          colcon build --packages-up-to rmcs-navigation
