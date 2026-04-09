@@ -1,0 +1,13 @@
+{
+    "workspace.library": [
+        "src/lua",
+        "src/lua/lib"
+    ],
+    "runtime.version": "Lua 5.4",
+    "diagnostics.globals": [
+        "on_tick",
+        "on_init",
+        "control_speed_callback",
+        "blackboard"
+    ]
+}
