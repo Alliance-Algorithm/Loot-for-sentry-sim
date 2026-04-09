@@ -88,7 +88,7 @@ constexpr auto to_string(rmcs_msgs::RobotId id) noexcept -> const char* {
 template <>
 struct std::formatter<rmcs_msgs::GameStage> : std::formatter<const char*> {
     auto format(rmcs_msgs::GameStage stage, std::format_context& ctx) const {
-        return std::formatter<const char*>::format(rmcs_msgs::to_string(stage), ctx);
+        return std::formatter<const char*>::format(rmcs::navigation::detail::to_string(stage), ctx);
     }
 };
 
