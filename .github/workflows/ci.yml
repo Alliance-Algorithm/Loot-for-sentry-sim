@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: qzhhhi/rmcs-develop:latest
+      options: --user 0
     steps:
       - name: Checkout rmcs-navigation
         uses: actions/checkout@v4
