@@ -12,7 +12,7 @@ env:
   RMCS_REF: main
 
 jobs:
-  lua-test:
+  test:
     runs-on: ubuntu-latest
     container:
       image: qzhhhi/rmcs-develop:latest
@@ -45,14 +45,6 @@ jobs:
 
             lua "${test_file}"
           done
-
-  cxx-build:
-    runs-on: ubuntu-latest
-    container:
-      image: qzhhhi/rmcs-develop:latest
-    steps:
-      - name: Checkout rmcs-navigation
-        uses: actions/checkout@v4
 
       - name: Clone RMCS workspace
         shell: bash
