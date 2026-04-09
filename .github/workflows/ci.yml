@@ -61,6 +61,8 @@ jobs:
         working-directory: /tmp/RMCS/rmcs_ws
         run: |
           set -euo pipefail
+          set +u
           source /opt/ros/jazzy/setup.bash
+          set -u
           export PATH="/opt/cmake/bin:${PATH}"
           colcon build --packages-up-to rmcs-navigation
