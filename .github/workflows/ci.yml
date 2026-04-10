@@ -21,31 +21,13 @@ jobs:
       - name: Checkout rmcs-navigation
         uses: actions/checkout@v5
 
-      - name: Run Lua tests directly
+      - name: Run Lua tests
         shell: bash
         run: |
           set -euo pipefail
-
-          skip_lua_tests=(
-            "util.lua"
-            "restart_navigation.lua"
-          )
-          for test_file in test/lua/*.lua; do
-            test_name="$(basename "${test_file}")"
-
-            should_skip=false
-            for skip_name in "${skip_lua_tests[@]}"; do
-              if [[ "${test_name}" == "${skip_name}" ]]; then
-                should_skip=true
-                break
-              fi
-            done
-            if [[ "${should_skip}" == true ]]; then
-              continue
-            fi
-
-            lua "${test_file}"
-          done
+          export PATH="/opt/cmake/bin:${PATH}"
+          cmake -S . -B build -DBUILD_TESTING=ON
+          ctest --test-dir build --output-on-failure
 
       - name: Clone RMCS workspace
         shell: bash

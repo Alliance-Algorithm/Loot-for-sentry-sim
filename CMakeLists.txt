@@ -91,3 +91,8 @@ pluginlib_export_plugin_description_file(
 
 include(cmake/version.cmake)
 include(cmake/export.cmake)
+
+if(BUILD_TESTING)
+    include(CTest)
+    include(test/test.cmake)
+endif()
