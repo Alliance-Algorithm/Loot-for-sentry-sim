@@ -26,8 +26,8 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="/opt/cmake/bin:${PATH}"
-          cmake -S . -B build -DBUILD_TESTING=ON
-          ctest --test-dir build --output-on-failure
+          cmake -S test -B build/test
+          ctest --test-dir build/test --output-on-failure
 
       - name: Clone RMCS workspace
         shell: bash
