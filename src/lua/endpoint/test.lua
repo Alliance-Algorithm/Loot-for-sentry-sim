@@ -17,9 +17,7 @@ local request = Scheduler.request
 blackboard = require("blackboard").singleton()
 
 on_init = function()
-	for _, line in ipairs(ascii) do
-		api.info(line)
-	end
+	api.info(ascii.banner)
 
 	clock:reset(blackboard.meta.timestamp)
 

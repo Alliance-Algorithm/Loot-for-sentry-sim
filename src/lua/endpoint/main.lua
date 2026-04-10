@@ -43,10 +43,6 @@ blackboard = require("blackboard").singleton()
 --    - handle:history() 规范暴露接口
 --    - task:force_resume() 用于跳出等待的挂起状态
 on_init = function()
-	for _, line in ipairs(ascii) do
-		api.info(line)
-	end
-
 	clock:reset(blackboard.meta.timestamp)
 
 	-- 定期更新导航的目标，防止规划失败后停滞
@@ -123,6 +119,8 @@ on_init = function()
 	edges:on(blackboard.getter.rswitch, "UP", function()
 		api.restart_navigation("rmul")
 	end)
+
+	api.info(ascii.banner)
 end
 
 on_tick = function()

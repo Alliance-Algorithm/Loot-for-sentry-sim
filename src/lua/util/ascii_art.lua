@@ -57,4 +57,11 @@ for index, line in ipairs(ascii_art) do
 	ascii_art[index] = miku .. line .. reset
 end
 
-return ascii_art
+local banner = ""
+for _, line in ipairs(ascii_art) do
+	banner = banner .. line .. "\n"
+end
+
+return {
+	banner = banner,
+}
