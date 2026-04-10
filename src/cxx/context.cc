@@ -5,9 +5,9 @@
 
 #include <yaml-cpp/yaml.h>
 
-namespace rmcs::navigation {
+namespace rmcs::navigation::details {
 
-namespace details {
+namespace {
 
 template <typename T>
 auto try_sync(Context::InputInterface<T>& input, const YAML::Node& root, const std::string& name)
@@ -35,7 +35,7 @@ auto make_input(
         component.register_input(name, input, true);
 }
 
-} // namespace details
+} // namespace
 
 struct Context::Impl {
     rclcpp::Node& node;
@@ -53,14 +53,14 @@ auto Context::init(std::mutex& io_mutex, bool mock) -> void {
     auto& subscription = pimpl->subscription;
     auto& node = pimpl->node;
 
-    details::make_input(component, "/referee/id", robot_id, mock);
-    details::make_input(component, "/remote/switch/right", switch_right, mock);
-    details::make_input(component, "/remote/switch/left", switch_left, mock);
-    details::make_input(component, "/referee/game/stage", game_stage, mock);
-    details::make_input(component, "/referee/current_hp", robot_health, mock);
-    details::make_input(component, "/referee/shooter/bullet_allowance", robot_bullet, mock);
-    details::make_input(component, "/referee/game/red_score", red_score, mock);
-    details::make_input(component, "/referee/game/blue_score", blue_score, mock);
+    make_input(component, "/referee/id", robot_id, mock);
+    make_input(component, "/remote/switch/right", switch_right, mock);
+    make_input(component, "/remote/switch/left", switch_left, mock);
+    make_input(component, "/referee/game/stage", game_stage, mock);
+    make_input(component, "/referee/current_hp", robot_health, mock);
+    make_input(component, "/referee/shooter/bullet_allowance", robot_bullet, mock);
+    make_input(component, "/referee/game/red_score", red_score, mock);
+    make_input(component, "/referee/game/blue_score", blue_score, mock);
 
     if (mock) {
         constexpr auto topic = "/rmcs_navigation/context/mock";
@@ -80,11 +80,11 @@ auto Context::from(const std::string& raw) noexcept -> std::expected<void, std::
         if (!root.IsMap())
             return std::unexpected{"context yaml root must be a map"};
 
-        details::try_sync(game_stage, root, "game_stage");
-        details::try_sync(robot_health, root, "robot_health");
-        details::try_sync(robot_bullet, root, "robot_bullet");
-        details::try_sync(red_score, root, "red_score");
-        details::try_sync(blue_score, root, "blue_score");
+        try_sync(game_stage, root, "game_stage");
+        try_sync(robot_health, root, "robot_health");
+        try_sync(robot_bullet, root, "robot_bullet");
+        try_sync(red_score, root, "red_score");
+        try_sync(blue_score, root, "blue_score");
 
         return {};
     } catch (const std::exception& exception) {
@@ -92,4 +92,4 @@ auto Context::from(const std::string& raw) noexcept -> std::expected<void, std::
     }
 }
 
-} // namespace rmcs::navigation
+} // namespace rmcs::navigation::details

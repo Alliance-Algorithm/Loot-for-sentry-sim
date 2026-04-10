@@ -3,6 +3,7 @@
 ---
 
 local api = require("api")
+local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local fsm = require("util.fsm")
 
@@ -16,13 +17,13 @@ local NaN = 0 / 0
 local cache = {
 	goal = { x = NaN, y = NaN },
 }
-function cache:send_goal()
+function cache:move()
 	local x = self.goal.x
 	local y = self.goal.y
 	if x ~= x or y ~= y then
 		return
 	end
-	api.apply_navigation_goal(x, y)
+	api.move(x, y)
 end
 
 ---
@@ -42,13 +43,17 @@ blackboard = require("blackboard").singleton()
 --    - handle:history() 规范暴露接口
 --    - task:force_resume() 用于跳出等待的挂起状态
 on_init = function()
+	for _, line in ipairs(ascii) do
+		api.info(line)
+	end
+
 	clock:reset(blackboard.meta.timestamp)
 
 	-- 定期更新导航的目标，防止规划失败后停滞
 	scheduler:append_task(function()
 		while true do
 			request:sleep(2.0)
-			cache:send_goal()
+			cache:move()
 		end
 	end)
 
@@ -60,7 +65,7 @@ on_init = function()
 			local y = cache.goal.y
 
 			if x ~= last.x or y ~= last.y then
-				cache:send_goal()
+				cache:move()
 			end
 
 			last = { x = x, y = y }

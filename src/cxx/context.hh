@@ -12,7 +12,7 @@
 #include <mutex>
 #include <string>
 
-namespace rmcs::navigation {
+namespace rmcs::navigation::details {
 
 struct Context {
     RMCS_PIMPL_DEFINITION(Context)
@@ -35,4 +35,4 @@ public:
     auto from(const std::string& raw) noexcept -> std::expected<void, std::string>;
 };
 
-} // namespace rmcs::navigation
+} // namespace rmcs::navigation::details

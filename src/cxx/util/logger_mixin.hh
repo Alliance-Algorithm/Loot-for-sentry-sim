@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <format>
 #include <utility>
 
@@ -26,24 +25,17 @@ struct LoggerMixin {
         auto text = std::format(fmt, std::forward<Args>(args)...);
         RCLCPP_ERROR(self.get_logger(), "%s", text.c_str());
     }
+};
 
-    static constexpr auto kAsciiIcon = std::array{
-        "|       ___           ___           ___           ___      |",
-        "|      ╱╲  ╲         ╱╲__╲         ╱╲  ╲         ╱╲  ╲     |",
-        "|     ╱::╲  ╲       ╱::│  │       ╱::╲  ╲       ╱::╲  ╲    |",
-        "|    ╱:╱╲:╲  ╲     ╱:│:│  │      ╱:╱╲:╲  ╲     ╱:╱╲ ╲  ╲   |",
-        "|   ╱::╲~╲:╲  ╲   ╱:╱│:│__│__   ╱:╱  ╲:╲  ╲   _╲:╲~╲ ╲  ╲  |",
-        "|  ╱:╱╲:╲ ╲:╲__╲ ╱:╱ │::::╲__╲ ╱:╱__╱ ╲:╲__╲ ╱╲ ╲:╲ ╲ ╲__╲ |",
-        "|  ╲╱_│::╲╱:╱  ╱ ╲╱__╱~~╱:╱  ╱ ╲:╲  ╲  ╲╱__╱ ╲:╲ ╲:╲ ╲╱__╱ |",
-        "|     │:│::╱  ╱        ╱:╱  ╱   ╲:╲  ╲        ╲:╲ ╲:╲__╲   |",
-        "|     │:│╲╱__╱        ╱:╱  ╱     ╲:╲  ╲        ╲:╲╱:╱  ╱   |",
-        "|     │:│  │         ╱:╱  ╱       ╲:╲__╲        ╲::╱  ╱    |",
-        "|      ╲│__│         ╲╱__╱         ╲╱__╱         ╲╱__╱     |",
-    };
-    auto print_icon(this const auto& self) {
-        for (const auto* line : kAsciiIcon)
-            self.info("{}", line);
-    }
+template <class T>
+struct LoggerWrap : LoggerMixin {
+    explicit LoggerWrap(T& node)
+        : node{node} {}
+
+    auto get_logger() const -> rclcpp::Logger { return node.get_logger(); }
+
+private:
+    T& node;
 };
 
 } // namespace rmcs::navigation

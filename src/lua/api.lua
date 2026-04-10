@@ -10,7 +10,7 @@ local util = require("util.native")
 --- @field warn fun(message: string)
 --- @field fuck fun(message: string)
 ---
---- @field apply_navigation_goal fun(x: number, y: number)
+--- @field move fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)
 --- @field update_chassis_mode fun(mode: string)
 --- @field update_chassis_vel fun(x: number, y: number)

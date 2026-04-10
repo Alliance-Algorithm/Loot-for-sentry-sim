@@ -5,6 +5,7 @@
 #endif
 
 #include "cxx/context.hh"
+#include "cxx/navigation.hh"
 #include "cxx/util/logger_mixin.hh"
 #include "cxx/util/rmcs_msgs_format.hh" // IWYU pragma: keep
 
@@ -43,7 +44,8 @@ private:
     sol::protected_function lua_on_tick;
     sol::protected_function lua_control_speed_callback;
 
-    Context context;
+    details::Context context;
+    details::Navigation navigation;
 
     struct Command {
         OutputInterface<Eigen::Vector2d> chassis_velocity;
@@ -89,9 +91,7 @@ private:
 
         // @TODO:
         //  补全这些实现
-        api.set_function("apply_navigation_goal", [this](double x, double y) {
-            warn("unimplement: apply_navigation_goal({}, {})", x, y);
-        });
+        api.set_function("move", [this](double x, double y) { navigation.move(x, y); });
         api.set_function("update_gimbal_direction", [this](double angle) {
             warn("unimplement: update_gimbal_direction({})", angle);
         });
@@ -138,9 +138,10 @@ private:
         make_api_injection();
 
         // Load Function Binding
+        auto endpoint = get_parameter("endpoint").as_string();
+        auto required = std::format("require('endpoint.{}')", endpoint);
         auto load_result = unwrap_sol(
-            lua->safe_script("require('main')", sol::script_pass_on_error),
-            "failed to load lua main");
+            lua->safe_script(required, sol::script_pass_on_error), "failed to load lua main");
 
         lua_blackboard = (*lua)["blackboard"];
         lua_on_init = (*lua)["on_init"];
@@ -162,8 +163,8 @@ private:
 public:
     explicit Navigation()
         : rclcpp::Node{get_component_name(), option()}
-        , context{*this, *this} {
-        print_icon();
+        , context{*this, *this}
+        , navigation{*this} {
 
         mock_context = get_parameter_or("mock_context", false);
 

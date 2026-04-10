@@ -39,7 +39,7 @@ local bb = Blackboard.singleton()
 bb.play.rswitch = "DOWN"
 bb.meta.timestamp = 0
 
-require("main")
+require("endpoint.main")
 
 local function get_main_cache()
 	for index = 1, 32 do
