@@ -75,6 +75,10 @@ on_init = function()
 		local Motion = {
 			IDLE = "IDLE",
 			FREE = "FREE",
+			BUMPY_ROAD = "BUMPY_ROAD",
+			TRAVEL_CAUTIOUS = "TRAVEL_CAUTIOUS",
+			TRAVEL_FOCUSED = "TRAVEL_FOCUSED",
+			RUSH_TO_HOME = "RUSH_TO_HOME",
 		}
 		local motion = fsm:new(Motion.FREE)
 
