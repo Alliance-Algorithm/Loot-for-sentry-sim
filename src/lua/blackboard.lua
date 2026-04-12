@@ -22,7 +22,7 @@ local function create_default_blackboard()
 			lswitch = "UNKNOWN",
 		},
 		meta = {
-			timestamp = 0,
+			timestamp = 0, -- 秒
 		},
 
 		-- Static Information
@@ -59,6 +59,12 @@ local function create_default_blackboard()
 			common_elevated_ground_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 普通高地（飞坡起点那个高地）
 			common_elevated_ground_final = PointPair { { 0, 0 }, { 0, 0 } },
 		},
+	}
+
+	result.getter = {
+		rswitch = function()
+			return result.play.rswitch
+		end,
 	}
 
 	result.condition = {
