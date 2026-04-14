@@ -47,27 +47,6 @@ cmake --build build -j
 auto var = T { };
 ```
 
-### 4) Lua 运行时上下文（rmcs-navigation）
-
-- Lua 入口位于 `rmcs_ws/src/skills/rmcs-navigation/src/lua/main.lua`。
-  - `on_init()` 负责初始化边沿检测、周期任务与运行期状态。
-  - `on_tick()` 是唯一稳定的逐帧入口，先更新时钟，再驱动边沿检测 / 调度器。
-- 统一时间源位于 `src/lua/util/clock.lua`。
-  - 时间由 `blackboard.meta.timestamp` 提供。
-  - 只允许在 `on_init()` / `on_tick()` 中通过 `clock:reset(...)` / `clock:update(...)` 更新。
-  - 业务逻辑、协程原语、调度器内部不要直接使用 `os.clock()`。
-- 现有 Lua 行为层主要由以下模块组成：
-  - `blackboard.lua`：共享状态与条件函数。
-  - `option.lua`：决策树拼装。
-  - `util/behavior.lua`：行为树叶子执行模型。
-  - `util/interrupt.lua` / `util/edge.lua`：中断（可选）与边沿检测。
-  - `util/scheduler.lua`：当前协程调度运行时（统一通过 `scheduler.request` 提供 `yield/sleep/wait_until` 原语）。
-- Lua 测试位于 `test/lua/*.lua`，约定：
-  - 通过 `test/lua/util.lua` 设置 `package.path`。
-  - 单文件直接运行：`lua test/lua/xxx.lua`。
-  - 若修改了 Lua 运行时、行为树或入口逻辑，优先补充/更新对应 Lua 测试。
-
-
 ## Debugging SOP
 
 ### 1) 导航相关调试方法

@@ -14,16 +14,30 @@
 
 ![Call Chain](doc/call-chain.svg)
 
-### Component
+### Component (C++ 侧)
 
-配置项：
+一个最小的可运行示例如下：
 
 ```yaml
+# rmcs_bringup/config/navigation.yaml
+rmcs_executor:
+  ros__parameters:
+    update_rate: 1000.0
+    components:
+      - rmcs::navigation::Navigation -> rmcs_navigation
+
 rmcs_navigation:
   ros__parameters:
+    # 策略名称：
+    # - fast-push-output "速推前哨站"
+    # - kill-robots "杀伤优先"
+    decision: "fast-push-output"
     command_vel_name: "/cmd_vel_smoothed"
     mock_context: true
     endpoint: "main"
-    decision: "fast-push-output"
-    # ......
+```
+
+构建使用如下指令在本机启动：
+```zsh
+ros2 launch rmcs_bringup rmcs.launch.py robot:=navigation
 ```
