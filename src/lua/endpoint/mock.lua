@@ -22,18 +22,15 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
 	scheduler:append_task(function()
-		request:sleep(2.0)
-		api.info("test endpoint: send first goal")
-		api.send_target(1.0, 1.0)
-
 		request:sleep(0.5)
-		api.info("test endpoint: send duplicated goal")
-		api.send_target(1.0, 1.0)
-
-		request:sleep(0.5)
-		api.info("test endpoint: replace with a new goal")
-		api.send_target(2.0, 1.0)
 	end)
+
+	api.restart_navigation {
+		launch_livox = false,
+		launch_odin1 = false,
+		global_map = "rmul",
+		use_sim_time = true,
+	}
 end
 
 on_tick = function()
