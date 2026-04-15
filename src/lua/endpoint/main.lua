@@ -46,6 +46,10 @@ blackboard = require("blackboard").singleton()
 on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
+	if option.enable_goal_topic_forward then
+		api.switch_topic_forward(true)
+	end
+
 	api.info("use decision: '" .. option.decision .. "'")
 
 	-- 定期更新导航的目标，防止规划失败后停滞
@@ -138,8 +142,12 @@ on_tick = function()
 	scheduler:spin_once()
 end
 
+on_exit = function()
+	api.stop_navigation()
+end
+
 --- 由 NAV2 发布的目标速度值，在此处理回调
-control_speed_callback = function(vx, vy, qx)
+on_control = function(vx, vy, qx)
 	local _ = qx
 	api.update_chassis_vel(vx, vy)
 end

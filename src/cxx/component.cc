@@ -38,7 +38,8 @@ private:
     sol::table lua_blackboard;
     sol::protected_function lua_on_init;
     sol::protected_function lua_on_tick;
-    sol::protected_function lua_control_speed_callback;
+    sol::protected_function lua_on_exit;
+    sol::protected_function lua_on_control;
 
     details::Context context;
     details::Navigation navigation;
@@ -195,10 +196,24 @@ private:
         lua_blackboard = (*lua)["blackboard"];
         lua_on_init = (*lua)["on_init"];
         lua_on_tick = (*lua)["on_tick"];
-        lua_control_speed_callback = (*lua)["control_speed_callback"];
 
-        if (!lua_on_init.valid() || !lua_on_tick.valid()) {
+        const auto situation = std::array{
+            lua_on_init.valid(),
+            lua_on_tick.valid(),
+        };
+        if (!std::ranges::all_of(situation, std::identity{}))
             throw std::runtime_error("lua main must define on_init() and on_tick()");
+
+        lua_on_exit = (*lua)["on_exit"];
+        if (lua_on_exit == sol::lua_nil) {
+            lua_on_exit = lua->safe_script("return function() end", sol::script_pass_on_error);
+            warn("lua endpoint does not define optional on_exit(), fallback to no-op");
+        }
+        lua_on_control = (*lua)["on_control"];
+        if (lua_on_control == sol::lua_nil) {
+            lua_on_control =
+                lua->safe_script("return function(_, _, _) end", sol::script_pass_on_error);
+            warn("lua endpoint does not define optional on_control(), fallback to no-op");
         }
 
         // Init Lua First
@@ -216,11 +231,9 @@ public:
         , navigation{*this} {
 
         mock_context = param<bool>("mock_context");
-        auto enable_goal_topic_forward = get_parameter_or("enable_goal_topic_forward", true);
 
         context.init(io_mutex, mock_context);
         command.init(*this);
-        navigation.switch_topic_forward(enable_goal_topic_forward);
 
         lua_init();
 
@@ -232,8 +245,7 @@ public:
                 auto vx = msg->linear.x;
                 auto vy = msg->linear.y;
                 auto qx = msg->angular.x;
-                unwrap_sol(
-                    lua_control_speed_callback(vx, vy, qx), "lua control_speed_callback failed");
+                unwrap_sol(lua_on_control(vx, vy, qx), "lua on_control failed");
             });
 
         info("Navigation is initialized");

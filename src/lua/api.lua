@@ -56,7 +56,7 @@ function api.restart_navigation(config)
 
 	local command = [[
         source %q
-        screen -S rmcs-navigation -X quit 2>/dev/null
+        screen -S rmcs-navigation -X quit
 
         screen -dmS rmcs-navigation
         screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml %s"
@@ -65,6 +65,13 @@ function api.restart_navigation(config)
 	local packed_command = string.format(command, filename, sensor_config, motion_config)
 
 	util.run_command(packed_command)
+end
+
+function api.stop_navigation()
+	local command = [[
+        screen -S rmcs-navigation -X quit
+    ]]
+	util.run_command(command)
 end
 
 return api

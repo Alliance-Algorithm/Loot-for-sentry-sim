@@ -43,4 +43,4 @@ on_tick = function()
 end
 
 --- 由 NAV2 发布的目标速度值，在此处理回调
-control_speed_callback = function(_, _, _) end
+on_control = function(_, _, _) end

@@ -9,7 +9,8 @@
     "diagnostics.globals": [
         "on_tick",
         "on_init",
-        "control_speed_callback",
-        "blackboard"
+        "on_exit",
+        "on_control",
+        "blackboard",
     ]
 }

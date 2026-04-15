@@ -144,8 +144,6 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
                     client->async_cancel_goal(handle);
                     return;
                 }
-
-                info("send navigation goal: x={}, y={}", goal.x, goal.y);
             };
         options.result_callback = [this, goal, request_id](const GoalResult& result) {
             if (request_id != latest_request_id)
@@ -168,13 +166,13 @@ struct Navigation::Impl : rmcs::navigation::NodeMixin {
 
                 auto& position = message->pose.position;
                 send_target(position.x, position.y);
-                info("forward goal from {}: x={}, y={}", topic, position.x, position.y);
+                info("forward {} -> ({:.1}, {:.1})", topic, position.x, position.y);
             });
     }
 
 public:
-    explicit Impl(rclcpp::Node& node_ref)
-        : node{node_ref} {}
+    explicit Impl(rclcpp::Node& node)
+        : node{node} {}
 
     ~Impl() {
         auto current_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
@@ -202,10 +200,8 @@ public:
         auto request_id = ++latest_request_id;
         auto cancel_handle = std::exchange(current_goal_handle, std::shared_ptr<GoalHandle>{});
 
-        if (cancel_handle) {
-            info("replace active navigation goal with x={}, y={}", goal.x, goal.y);
+        if (cancel_handle)
             client->async_cancel_goal(cancel_handle);
-        }
 
         send_target(goal, request_id);
     }

@@ -20,6 +20,7 @@ on_init = function()
 	api.info(ascii.banner)
 
 	clock:reset(blackboard.meta.timestamp)
+	api.switch_topic_forward(true)
 
 	scheduler:append_task(function()
 		request:sleep(0.5)
@@ -39,5 +40,9 @@ on_tick = function()
 	scheduler:spin_once()
 end
 
+on_exit = function()
+	api.stop_navigation()
+end
+
 --- 由 NAV2 发布的目标速度值，在此处理回调
-control_speed_callback = function(_, _, _) end
+on_control = function(_, _, _) end

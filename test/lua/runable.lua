@@ -96,8 +96,8 @@ assert_eq(calls.restart_navigation[1].use_sim_time, false, "restart config use_s
 tick(2.2)
 assert_eq(#calls.restart_navigation, 1, "holding UP should not retrigger restart")
 
-control_speed_callback(0.3, -0.4, 42.0)
-assert_eq(#calls.update_chassis_vel, 1, "control_speed_callback should forward chassis velocity")
+on_control(0.3, -0.4, 42.0)
+assert_eq(#calls.update_chassis_vel, 1, "on_control should forward chassis velocity")
 assert_table_eq(calls.update_chassis_vel[1], { 0.3, -0.4 }, "chassis velocity payload")
 
 assert_true(true, "runable smoke test finished")
