@@ -35,6 +35,7 @@ rmcs_navigation:
     command_vel_name: "/cmd_vel_smoothed"
     mock_context: true
     endpoint: "main"
+    enable_goal_topic_forward: true
 ```
 
 构建使用如下指令在本机启动：

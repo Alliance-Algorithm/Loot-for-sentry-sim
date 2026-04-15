@@ -7,8 +7,6 @@
 #include "cxx/context.hh"
 #include "cxx/navigation.hh"
 #include "cxx/util/node_mixin.hh"
-#include "cxx/util/rmcs_msgs_format.hh" // IWYU pragma: keep
-
 #include <filesystem>
 
 #include <Eigen/Geometry>
@@ -17,6 +15,7 @@
 #include <rclcpp/node.hpp>
 #include <rclcpp/subscription.hpp>
 #include <rmcs_executor/component.hpp>
+#include <rmcs_msgs/rmcs_msgs.hpp> // IWYU pragma: keep
 #include <sol/sol.hpp>
 
 namespace rmcs::navigation {
@@ -45,7 +44,7 @@ private:
     details::Navigation navigation;
 
     struct Command {
-        OutputInterface<Eigen::Vector2d> chassis_velocity;
+        OutputInterface<Eigen::Vector2d> chassis_speed;
         OutputInterface<std::size_t> nod_count;
         OutputInterface<bool> rotate_chassis;
         OutputInterface<bool> detect_targets;
@@ -53,7 +52,7 @@ private:
 
         auto init(Navigation& component) -> void {
             component.register_output(
-                "/rmcs_navigation/chassis_velocity", chassis_velocity, Eigen::Vector2d::Zero());
+                "/rmcs_navigation/chassis_velocity", chassis_speed, Eigen::Vector2d::Zero());
             component.register_output("/rmcs_navigation/nod_count", nod_count, 0);
             component.register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
             component.register_output("/rmcs_navigation/detect_targets", detect_targets, false);
@@ -100,7 +99,7 @@ private:
             warn("unimplement: update_chassis_mode(\"{}\")", mode);
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
-            warn("unimplement: update_chassis_vel({}, {})", x, y);
+            *command.chassis_speed = Eigen::Vector2d{x, y};
         });
     }
 
@@ -158,11 +157,11 @@ private:
         user["yaw"] = yaw;
 
         auto game = lua_blackboard["game"].get<sol::table>();
-        game["stage"] = detail::to_string(*context.game_stage);
+        game["stage"] = rmcs_msgs::to_string(*context.game_stage);
 
         auto play = lua_blackboard["play"].get<sol::table>();
-        play["rswitch"] = detail::to_string(*context.switch_right);
-        play["lswitch"] = detail::to_string(*context.switch_left);
+        play["rswitch"] = rmcs_msgs::to_string(*context.switch_right);
+        play["lswitch"] = rmcs_msgs::to_string(*context.switch_left);
 
         auto meta = lua_blackboard["meta"].get<sol::table>();
         meta["timestamp"] = this->now().seconds();
