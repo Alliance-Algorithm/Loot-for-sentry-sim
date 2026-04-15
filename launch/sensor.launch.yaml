@@ -5,13 +5,13 @@ launch:
       default: "false"
   - arg:
       name: "launch_livox"
-      default: "false"
+      default: "true"
   - arg:
       name: "launch_odin1"
       default: "false"
   - arg:
       name: "global_map"
-      default: "rmul"
+      default: "empty"
 
   # Private
   - arg:
@@ -26,6 +26,12 @@ launch:
   - include:
       if: "$(var launch_livox)"
       file: "$(find-pkg-share livox_ros_driver2)/launch/msg_MID360_launch.py"
+
+  - include:
+      if: "$(var launch_livox)"
+      file: "$(find-pkg-share rmcs_local_map)/launch/launch.py"
+  - include:
+      file: "$(find-pkg-share point_lio)/launch/point_lio.launch.py"
 
   # 2. 生命周期管理器
   - let:
@@ -75,10 +81,3 @@ launch:
           value: "$(var share_location)/maps/$(var global_map).yaml"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"
-
-  # 5. 初始变换 (remove after testing)
-  - node:
-      pkg: "tf2_ros"
-      exec: "static_transform_publisher"
-      name: "initial_transform"
-      args: "0 0 0 0 0 0 world base_link"

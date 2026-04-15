@@ -64,14 +64,14 @@ function api.restart_navigation(config)
     ]]
 	local packed_command = string.format(command, filename, sensor_config, motion_config)
 
-	util.run_command(packed_command)
+	return util.run_command(string.format("(%s) >/dev/null 2>&1 &", packed_command))
 end
 
 function api.stop_navigation()
 	local command = [[
         screen -S rmcs-navigation -X quit
     ]]
-	util.run_command(command)
+	return util.run_command(string.format("(%s) >/dev/null 2>&1 &", command))
 end
 
 return api

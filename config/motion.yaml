@@ -41,9 +41,16 @@ local_costmap:
       height: 16
       resolution: 0.04
       plugins: ["static_layer", "inflation_layer"]
+
       static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_topic: "/local_map"
+        plugin: nav2_costmap_2d::StaticLayer
+        map_topic: /local_map
+        map_subscribe_transient_local: false
+        subscribe_to_updates: true
+        use_maximum: true
+        track_unknown_space: false
+        lethal_cost_threshold: 90
+
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         inflation_radius: 0.2
@@ -153,12 +160,3 @@ controller_server:
       # 旋转行为惩罚
       # 抑制无意义的原地打转或过度旋转。
       Twirling.scale: 12.0
-
-# 末端速度优化
-velocity_smoother:
-  ros__parameters:
-    smoothing_frequency: 40.0
-    max_velocity: [3.5, 3.5, 3.0]
-    max_accel: [+8.0, +30.0, +30.0]
-    max_decel: [-8.0, -30.0, -30.0]
-    odom_topic: /odom
