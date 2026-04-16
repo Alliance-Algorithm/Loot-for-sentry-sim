@@ -42,3 +42,110 @@ rmcs_navigation:
 ```zsh
 ros2 launch rmcs_bringup rmcs.launch.py robot:=navigation
 ```
+
+### Decision (Lua 侧)
+
+#### 1. 基本思想
+
+将任务拆解成可复现，可单测的最小示例，例如，对于开局后前往巡逻点的任务，我们将其拆分为
+
+```
+核心任务：进行巡航打击
+
+0. 从起始点前往公路区前（起伏路段）
+{
+  a. 将导航目标点设置到公路区前
+  b. 阻塞检查坐标，直到到达目的地
+}
+
+1. 跨越起伏路段（begin -> final）
+{
+  a. 设置底盘跟随
+  b. 设置云台与起伏路段垂直
+  c. 切换底盘至起伏路段模式
+  d. 开始导航至起伏路段对面
+}
+
+2. 进入巡航模式
+{
+  a. 开启小陀螺
+  b. 设置云台为扫描模式
+  c. 循环
+    - 到达点1
+    - 看看狗洞
+    - 到达点2
+    - 看看前哨站
+    - 下一次循环
+}
+```
+
+我们或许有这样的文件结构：
+```
+lua/
+  intent/                       意图，核心任务，是下面迷你任务的组合
+    start-cruise.lua            > 开始巡航
+
+  task/                         迷你任务
+    navigate-to.lua             > 导航至（普通事件，不涉及地形跨越）
+    crossing-road-zone.lua      > 跨越公路区
+    cruise-loop.lua             > 巡航进行时
+
+  endpoint/                     接入点
+    main.lua                    > 比赛用的接入点，是正式入口
+    test.lua                    > 测试用的，随便改动
+```
+
+对于线下调试，我们可以直接把小任务（比如从起始点前往公路区前）注册进调度器，再绑定一个遥控器触发信号为开始，手动触发该事件，单独测试
+
+```lua
+
+on_init = function()
+  ...
+  -- 右拨杆向上的触发事件
+  edges:on(blackboard.getter.rswitch, "UP", function()
+    --- 触发一个小任务
+    scheduler:append_task(function()
+      -- 小任务可以是阻塞的，使用协程可以很轻松处理多个
+      -- 语义上阻塞任务的并行，使用线性语义描述业务是美妙的
+      crossing_road_zone {
+        begin = {x = 0, y = 0},
+        final = {x = 3, y = 0},
+      }
+
+      -- 再回来
+      crossing_road_zone {
+        begin = {x = 3, y = 0},
+        final = {x = 0, y = 0},
+      }
+	  end)
+	end)
+  ...
+end
+
+```
+
+
+#### 2. 框架使用
+
+> 该框架的核心目标，是将高层决策与底层执行明确分离：最上层由 `endpoint` 根据当前局势持续观察和判断，在运行中决定机器人此刻应当采取什么意图，例如继续推进、回防基地或撤退补血；意图一旦确定，再被拆解为可顺序执行、可组合的任务流程；这些任务不直接调用底层能力，通过 `action` 这一层发起具体动作，由它封装运行时状态并收口到底层 `api`；与此同时，整个过程依赖 `blackboard` 提供共享的世界状态与上下文信息。
+
+对于接入点（endpoint），需要暴露以下接口：
+
+```lua
+-- 状态黑板
+blackboard
+
+-- Lua 侧的初始化
+on_init
+
+-- 10Hz 的更新 Tick
+on_tick
+
+-- 退出时的 Hook
+on_exit (optional)
+
+-- 收到来自 nav2 的控制 Topic 的回调
+on_control
+```
+
+TODO: 未完待续

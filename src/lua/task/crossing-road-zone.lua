@@ -1,7 +1,7 @@
 local blackboard = require("blackboard").singleton()
 local request = require("util.scheduler").request
 local api = require("api")
-local context = require("context")
+local action = require("action")
 
 --- @param ours_zone boolean
 --- @param forward_center boolean
@@ -30,7 +30,7 @@ return function(ours_zone, forward_center)
 
 	local condition = blackboard.condition
 
-	context:set_target(from)
+	action:set_target(from)
 	local timeout = request:wait_until {
 		monitor = function()
 			return condition.near(from, 0.1)
