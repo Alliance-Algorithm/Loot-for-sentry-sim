@@ -1,0 +1,126 @@
+## 静态导航测试入口。
+##
+## 用途：
+## - 为纯软件联调提供一个稳定、最小的导航启动环境。
+## - 在没有任何真实传感器、里程计或 SLAM 输出时，验证导航链路本身是否能正常启动。
+## - 用于测试 map server、TF 关系以及 motion 配置，而不受外部感知链路影响。
+##
+## 启动内容：
+## - mock local_map（固定挂在 base_link）
+## - global_map
+## - world -> odom 和 odom -> base_link 两个静态 TF
+## - motion.launch.yaml 中的全部导航节点
+##
+## 不启动内容：
+## - 任意传感器驱动
+## - 任意 SLAM / 定位链路
+## - rmcs_local_map
+## - point_lio
+##
+## 适用场景：
+## - 验证 Nav2 各节点参数是否可正常加载
+## - 排查行为树、规划器、控制器与地图服务之间的协同问题
+## - 进行不依赖外部感知输入的静态回归测试
+
+launch:
+  - arg:
+      name: "configuration"
+      default: "$(find-pkg-share rmcs-navigation)/config"
+  - arg:
+      name: "share_location"
+      default: "$(find-pkg-share rmcs-navigation)"
+  - arg:
+      name: "use_sim_time"
+      default: "false"
+  - arg:
+      name: "global_map"
+      default: "rmul"
+
+  # 0. 生命周期管理器
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "lifecycle_manager"
+      param:
+        - name: "autostart"
+          value: true
+        - name: "node_names"
+          value:
+            - "global_map"
+            - "local_map"
+            - "bt_navigator"
+            - "planner_server"
+            - "controller_server"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  - include:
+      file: "$(find-pkg-share foxglove_bridge)/launch/foxglove_bridge_launch.xml"
+
+  # 1. 静态测试地图
+  - node:
+      pkg: "nav2_map_server"
+      exec: "map_server"
+      name: "local_map"
+      param:
+        - name: "yaml_filename"
+          value: "$(var share_location)/maps/empty.yaml"
+        - name: "topic_name"
+          value: "local_map"
+        - name: "frame_id"
+          value: "base_link"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  - node:
+      pkg: "nav2_map_server"
+      exec: "map_server"
+      name: "global_map"
+      param:
+        - from: "$(var share_location)/config/sensor.yaml"
+        - name: "yaml_filename"
+          value: "$(var share_location)/maps/$(var global_map).yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 2. 初始变换
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      args: "0 0 0 0 0 0 world odom"
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      args: "0 0 0 0 0 0 odom base_link"
+
+  # 3. 导航行为调度
+  - node:
+      pkg: "nav2_bt_navigator"
+      exec: "bt_navigator"
+      name: "bt_navigator"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: default_nav_to_pose_bt_xml
+          value: "$(var configuration)/motion.xml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 4. 全局规划 + 全局地图处理
+  - node:
+      pkg: "nav2_planner"
+      exec: "planner_server"
+      name: "planner_server"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 5. 局部规划 + 局部地图处理
+  - node:
+      pkg: "nav2_controller"
+      exec: "controller_server"
+      name: "controller_server"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"

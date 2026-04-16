@@ -1,0 +1,117 @@
+## 回放导航测试入口。
+##
+## 用途：
+## - 使用 ros2 bag 回放历史数据进行导航链路联调。
+## - 不启动任何真实硬件驱动（如 Livox/Odin），由 bag 提供传感器数据。
+## - 启动除驱动外的其余导航相关节点，包括定位/建图链路与 Nav2 运动链路。
+##
+## 启动内容：
+## - ros2 bag 回放进程（bag 路径可通过参数配置）
+## - point_lio 与 rmcs_local_map
+## - global_map map server
+## - world -> odom 静态 TF
+## - motion 导航节点（bt_navigator / planner_server / controller_server）
+##
+## 不启动内容：
+## - livox_ros_driver2
+## - odin_ros_driver
+
+launch:
+  # Export
+  - arg:
+      name: "use_sim_time"
+      default: "true"
+  - arg:
+      name: "global_map"
+      default: "empty"
+  - arg:
+      name: "bag_path"
+      default: "/workspaces/data/bag/battlefield_0/"
+
+  # Private
+  - arg:
+      name: "configuration"
+      default: "$(find-pkg-share rmcs-navigation)/config"
+  - arg:
+      name: "share_location"
+      default: "$(find-pkg-share rmcs-navigation)"
+
+  # 0. 录制回放 / 调试转发
+  - executable:
+      cmd: "ros2 bag play $(var bag_path) --clock"
+      output: "screen"
+  - include:
+      file: "$(find-pkg-share foxglove_bridge)/launch/foxglove_bridge_launch.xml"
+
+  # 1. 定位/局部地图
+  - include:
+      file: "$(find-pkg-share rmcs_local_map)/launch/launch.py"
+  - include:
+      file: "$(find-pkg-share point_lio)/launch/point_lio.launch.py"
+
+  # 2. 生命周期管理
+  - node:
+      pkg: "nav2_lifecycle_manager"
+      exec: "lifecycle_manager"
+      name: "lifecycle_manager"
+      param:
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+        - name: "autostart"
+          value: true
+        - name: "node_names"
+          value:
+            - "bt_navigator"
+            - "planner_server"
+            - "controller_server"
+            - "global_map"
+
+  # 3. 全局地图服务
+  - node:
+      pkg: "nav2_map_server"
+      exec: "map_server"
+      name: "global_map"
+      param:
+        - from: "$(var share_location)/config/sensor.yaml"
+        - name: "yaml_filename"
+          value: "$(var share_location)/maps/$(var global_map).yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 4. 初始变换
+  - node:
+      pkg: "tf2_ros"
+      exec: "static_transform_publisher"
+      args: "0 0 0 0 0 0 world odom"
+
+  # 5. 导航行为调度
+  - node:
+      pkg: "nav2_bt_navigator"
+      exec: "bt_navigator"
+      name: "bt_navigator"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: default_nav_to_pose_bt_xml
+          value: "$(var configuration)/motion.xml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 6. 全局规划 + 全局地图处理
+  - node:
+      pkg: "nav2_planner"
+      exec: "planner_server"
+      name: "planner_server"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  # 7. 局部规划 + 局部地图处理
+  - node:
+      pkg: "nav2_controller"
+      exec: "controller_server"
+      name: "controller_server"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
