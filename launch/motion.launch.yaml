@@ -53,10 +53,3 @@ launch:
         - from: "$(var configuration)/motion.yaml"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"
-
-  # 4. 初始变换
-  - node:
-      pkg: "tf2_ros"
-      exec: "static_transform_publisher"
-      name: "initial_transform"
-      args: "0 0 0 0 0 0 world odom"

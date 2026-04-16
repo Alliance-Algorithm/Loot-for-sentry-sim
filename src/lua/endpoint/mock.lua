@@ -24,15 +24,12 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	api.switch_topic_forward(true)
 
-	edges:on(blackboard.getter.rswitch, "UP", function()
-		api.warn("导航即将重启")
-		api.restart_navigation {
-			launch_livox = true,
-			launch_odin1 = false,
-			global_map = "empty",
-			use_sim_time = true,
-		}
-	end)
+	api.restart_navigation {
+		launch_livox = false,
+		launch_odin1 = false,
+		global_map = "empty",
+		use_sim_time = true,
+	}
 
 	scheduler:append_task(function()
 		while true do

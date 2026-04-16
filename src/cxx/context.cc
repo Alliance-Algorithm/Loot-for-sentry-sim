@@ -29,10 +29,11 @@ template <typename T>
 auto make_input(
     rmcs_executor::Component& component, const std::string& name, Context::InputInterface<T>& input,
     bool mock) -> void {
-    if (mock)
+    if (mock) {
         input.make_and_bind_directly();
-    else
+    } else {
         component.register_input(name, input, false);
+    }
 }
 
 } // namespace
@@ -53,7 +54,7 @@ auto Context::init(std::mutex& io_mutex, bool mock) -> void {
     auto& subscription = pimpl->subscription;
     auto& node = pimpl->node;
 
-    make_input(component, "/referee/chassis/power_limit", chassis_power_limit_referee, false);
+    make_input(component, "/referee/chassis/power_limit", chassis_power_limit_referee, mock);
 
     make_input(component, "/referee/id", robot_id, mock);
     make_input(component, "/remote/switch/right", switch_right, mock);
