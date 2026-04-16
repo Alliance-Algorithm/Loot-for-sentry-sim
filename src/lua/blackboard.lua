@@ -11,6 +11,7 @@ local function create_default_blackboard()
 		user = {
 			health = 0,
 			bullet = 0,
+			chassis_power_limit = 0,
 			x = 0,
 			y = 0,
 			yaw = 0,

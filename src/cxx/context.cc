@@ -32,7 +32,7 @@ auto make_input(
     if (mock)
         input.make_and_bind_directly();
     else
-        component.register_input(name, input, true);
+        component.register_input(name, input, false);
 }
 
 } // namespace
@@ -52,6 +52,8 @@ auto Context::init(std::mutex& io_mutex, bool mock) -> void {
     auto& component = pimpl->component;
     auto& subscription = pimpl->subscription;
     auto& node = pimpl->node;
+
+    make_input(component, "/referee/chassis/power_limit", chassis_power_limit_referee, false);
 
     make_input(component, "/referee/id", robot_id, mock);
     make_input(component, "/remote/switch/right", switch_right, mock);

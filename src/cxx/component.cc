@@ -152,6 +152,7 @@ private:
         auto user = lua_blackboard["user"].get<sol::table>();
         user["health"] = *context.robot_health;
         user["bullet"] = *context.robot_bullet;
+        user["chassis_power_limit"] = *context.chassis_power_limit_referee;
         user["x"] = x;
         user["y"] = y;
         user["yaw"] = yaw;

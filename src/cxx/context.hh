@@ -28,6 +28,7 @@ public:
     InputInterface<std::uint32_t> blue_score;
     InputInterface<rmcs_msgs::Switch> switch_right;
     InputInterface<rmcs_msgs::Switch> switch_left;
+    InputInterface<double> chassis_power_limit_referee;
 
     explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 

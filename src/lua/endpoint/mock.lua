@@ -36,7 +36,8 @@ on_init = function()
 
 	scheduler:append_task(function()
 		while true do
-			request:sleep(1)
+			request:sleep(0.5)
+			-- api.info("limit: " .. blackboard.user.chassis_power_limit)
 		end
 	end)
 end
