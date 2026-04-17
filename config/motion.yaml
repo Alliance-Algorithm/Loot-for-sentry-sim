@@ -72,14 +72,14 @@ controller_server:
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
       motion_model: "Omni"
-      time_steps: 40
+      time_steps: 50
       model_dt: 0.05
-      batch_size: 1000
+      batch_size: 1400
       iteration_count: 1
       prune_distance: 6.0
       transform_tolerance: 0.1
-      regenerate_noises: false
-      retry_attempt_limit: 4
+      regenerate_noises: true
+      retry_attempt_limit: 6
       visualize: true
 
       # 速度与加速度限制
@@ -98,7 +98,7 @@ controller_server:
       vx_std: 0.55
       vy_std: 0.55
       wz_std: 0.001
-      temperature: 0.30
+      temperature: 0.34
       gamma: 0.015
 
       critics:
@@ -121,19 +121,19 @@ controller_server:
       CostCritic.cost_power: 2
       CostCritic.consider_footprint: true
       CostCritic.near_goal_distance: 0.8
-      CostCritic.trajectory_point_step: 2
+      CostCritic.trajectory_point_step: 1
 
       GoalCritic.enabled: true
-      GoalCritic.cost_weight: 5.0
+      GoalCritic.cost_weight: 4.5
       GoalCritic.threshold_to_consider: 1.2
 
       PathAlignCritic.enabled: true
-      PathAlignCritic.cost_weight: 1.0
+      PathAlignCritic.cost_weight: 0.8
       PathAlignCritic.threshold_to_consider: 1.0
       PathAlignCritic.trajectory_point_step: 3
 
       PathFollowCritic.enabled: true
-      PathFollowCritic.cost_weight: 4.0
+      PathFollowCritic.cost_weight: 3.2
       PathFollowCritic.threshold_to_consider: 1.5
 
 local_costmap:
@@ -165,5 +165,5 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.45
+        inflation_radius: 0.35
         cost_scaling_factor: 1.0
