@@ -52,7 +52,7 @@ local_costmap:
       initial_transform_timeout: 120.0
       global_frame: base_link
       robot_base_frame: base_link
-      robot_radius: 0.35
+      footprint: "[[0.35, 0.35], [0.35, -0.35], [-0.35, -0.35], [-0.35, 0.35]]"
       update_frequency: 10.0
       publish_frequency: 10.0
       always_send_full_costmap: true
@@ -75,7 +75,7 @@ local_costmap:
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.2
+        inflation_radius: 0.45
         cost_scaling_factor: 1.0
 
 controller_server:
@@ -101,81 +101,73 @@ controller_server:
     # 布局规划核心
     controller_plugins: ["FollowPath"]
     FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: true
-      publish_evaluation: true
-
-      forward_prune_distance: 6.0
+      plugin: "nav2_mppi_controller::MPPIController"
+      motion_model: "Omni"
+      time_steps: 60
+      model_dt: 0.05
+      batch_size: 1200
+      iteration_count: 1
       prune_distance: 6.0
+      transform_tolerance: 0.1
+      regenerate_noises: false
+      retry_attempt_limit: 4
+      visualize: false
 
-      # 速度范围约束
-      max_vel_x: +2.0
-      min_vel_x: -2.0
-      max_vel_y: +2.0
-      min_vel_y: -2.0
-      max_vel_theta: +0.0
-      min_vel_theta: -0.0
+      # 速度与加速度限制
+      vx_max: 2.2
+      vx_min: -2.0
+      vy_max: 2.2
+      vy_min: -2.0
+      wz_max: 0.001
+      ax_max: 20.0
+      ax_min: -20.0
+      ay_max: 20.0
+      ay_min: -20.0
+      az_max: 0.001
 
-      # 速度模长约束
-      max_speed_xy: +4.0
-      min_speed_xy: +0.5
-      max_speed_theta: 0.0
+      # 采样噪声，鼓励左右探索
+      vx_std: 0.45
+      vy_std: 0.5
+      wz_std: 0.001
+      temperature: 0.3
+      gamma: 0.015
 
-      # 加减速度约束
-      acc_lim_x: +20.0
-      decel_lim_x: -20.0
-      acc_lim_y: +20.0
-      decel_lim_y: -20.0
-      acc_lim_theta: +3.0
-      decel_lim_theta: -3.0
-
-      # 采样密度
-      vx_samples: 20
-      vy_samples: 20
-      vtheta_samples: 0
-
-      # 前向仿真参数
-      # 控制候选轨迹向前模拟的时长和离散精度。
-      sim_time: 1.2
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-
-      # 终点判定与停车行为
-      # 控制接近目标时的容差，以及何时认为机器人已停下。
-      xy_goal_tolerance: 0.2
-      path_length_tolerance: 1.0
-      trans_stopped_velocity: 0.1
-      stateful: true
-
-      # 评估流程控制
-      # 控制轨迹打分时是否短路，以及速度命令的裁剪方式。
-      short_circuit_trajectory_evaluation: false
-      limit_vel_cmd_in_traj: false
-
-      # 轨迹评价器
-      # 决定 DWB 如何权衡障碍物、路径贴合、目标逼近和旋转行为。
       critics:
         [
-          "Oscillation",
-          "ObstacleFootprint",
-          "GoalAlign",
-          "PathAlign",
-          "PathDist",
-          "GoalDist",
+          "ConstraintCritic",
+          "CostCritic",
+          "GoalCritic",
+          "PathAlignCritic",
+          "PathFollowCritic",
+          "PreferForwardCritic",
         ]
 
-      ObstacleFootprint.scale: 0.5
+      ConstraintCritic.enabled: true
+      ConstraintCritic.cost_weight: 5.0
 
-      # 朝向与路径对齐评价
-      # 鼓励轨迹朝向目标并贴合全局路径方向。
-      GoalAlign:
-        scale: 0.25
-        forward_point_distance: 0.05
-      PathAlign:
-        scale: 1.0
-        forward_point_distance: 0.05
+      CostCritic.enabled: true
+      CostCritic.cost_weight: 24.0
+      CostCritic.critical_cost: 100.0
+      CostCritic.collision_cost: 8000000.0
+      CostCritic.near_collision_cost: 253
+      CostCritic.cost_power: 3
+      CostCritic.consider_footprint: true
+      CostCritic.near_goal_distance: 0.8
+      CostCritic.trajectory_point_step: 1
 
-      # 路径距离与目标距离评价
-      # 鼓励轨迹贴近路径并持续逼近目标点。
-      PathDist.scale: 2.0
-      GoalDist.scale: 3.0
+      GoalCritic.enabled: true
+      GoalCritic.cost_weight: 4.0
+      GoalCritic.threshold_to_consider: 1.2
+
+      PathAlignCritic.enabled: true
+      PathAlignCritic.cost_weight: 1.2
+      PathAlignCritic.threshold_to_consider: 1.0
+      PathAlignCritic.trajectory_point_step: 3
+
+      PathFollowCritic.enabled: true
+      PathFollowCritic.cost_weight: 4.0
+      PathFollowCritic.threshold_to_consider: 1.5
+
+      PreferForwardCritic.enabled: true
+      PreferForwardCritic.cost_weight: 0.0
+      PreferForwardCritic.threshold_to_consider: 0.7
