@@ -5,7 +5,7 @@ launch:
       default: "false"
   - arg:
       name: "launch_livox"
-      default: "false"
+      default: "true"
   - arg:
       name: "launch_odin1"
       default: "false"
