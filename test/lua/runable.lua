@@ -17,6 +17,7 @@ local calls = {
 package.loaded["api"] = {
 	info = function(_) end,
 	warn = function(_) end,
+	fuck = function(_) end,
 	send_target = function(x, y)
 		calls.send_target[#calls.send_target + 1] = { x, y }
 	end,
@@ -36,31 +37,19 @@ package.loaded["option"] = nil
 package.loaded["main"] = nil
 local Blackboard = require("blackboard")
 local option = require("option")
+local action = require("action")
 local bb = Blackboard.singleton()
 
 -- Mimic C++ option injection in component.cc
 option.decision = "auxiliary"
+option.enable_goal_topic_forward = false
 
 bb.play.rswitch = "DOWN"
 bb.meta.timestamp = 0
 
 require("endpoint.main")
 
-local function get_main_cache()
-	for index = 1, 32 do
-		local name, value = debug.getupvalue(on_init, index)
-		if name == nil then
-			break
-		end
-		if name == "cache" then
-			return value
-		end
-	end
-	error("failed to find cache upvalue from main.on_init")
-end
-
 on_init()
-local cache = get_main_cache()
 
 local function tick(now)
 	bb.meta.timestamp = now
@@ -70,8 +59,7 @@ end
 tick(0)
 assert_eq(#calls.send_target, 0, "initial tick should not send NaN goal")
 
-cache.goal.x = 1.5
-cache.goal.y = -2.0
+action:navigate({ x = 1.5, y = -2.0 })
 
 tick(0.1)
 assert_eq(#calls.send_target, 1, "goal change should trigger immediate send")

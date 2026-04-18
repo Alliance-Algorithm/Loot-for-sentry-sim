@@ -49,7 +49,7 @@ on_init = function()
 				handle:set_next(Intent.nothing)
 			end,
 		}
-		if intent_fsm:init_ready(Intent) then
+		if not intent_fsm:init_ready(Intent) then
 			error("意图状态机没有初始化完全，有未使用的意图")
 		end
 
