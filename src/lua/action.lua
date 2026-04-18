@@ -78,7 +78,7 @@ function action:update_chassis_vel(x, y)
 end
 
 function action:restart_navigation(config)
-	api.restart_navigation(config)
+	return api.restart_navigation(config)
 end
 
 function action:stop_navigation()
