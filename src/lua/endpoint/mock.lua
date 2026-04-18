@@ -2,10 +2,11 @@
 --- Local Context
 ---
 
-local api = require("api")
+local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local edges = require("util.edge").new()
+local native = require("util.native")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
@@ -18,23 +19,19 @@ local request = Scheduler.request
 blackboard = require("blackboard").singleton()
 
 on_init = function()
-	api.info(ascii.banner)
-	api.warn("⚠️ MOCK 模式，别上场哦")
+	action:info(ascii.banner)
+	action:warn("⚠️ MOCK 模式，别上场哦")
 
 	clock:reset(blackboard.meta.timestamp)
-	api.switch_topic_forward(true)
+	action:switch_topic_forward(true)
 
-	api.restart_navigation {
-		launch_livox = false,
-		launch_odin1 = false,
-		global_map = "empty",
-		use_sim_time = true,
-	}
+	native.run_command("ros2 launch rmcs-navigation static.launch.yaml &")
+	action:info("static.launch.yaml launched")
 
 	scheduler:append_task(function()
 		while true do
 			request:sleep(0.5)
-			-- api.info("limit: " .. blackboard.user.chassis_power_limit)
+			-- action:info("limit: " .. blackboard.user.chassis_power_limit)
 		end
 	end)
 end
@@ -47,10 +44,10 @@ on_tick = function()
 end
 
 on_exit = function()
-	api.stop_navigation()
+	action:stop_navigation()
 end
 
 --- 由 NAV2 发布的目标速度值，在此处理回调
 on_control = function(x, y, _)
-	api.update_chassis_vel(x, y)
+	action:update_chassis_vel(x, y)
 end

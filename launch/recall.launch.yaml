@@ -49,11 +49,11 @@ launch:
   - include:
       file: "$(find-pkg-share point_lio)/launch/point_lio.launch.py"
 
-  # 2. 生命周期管理
+  # 2. 传感侧生命周期管理（仅管理 global_map）
   - node:
       pkg: "nav2_lifecycle_manager"
       exec: "lifecycle_manager"
-      name: "lifecycle_manager"
+      name: "lifecycle_manager_sensor"
       param:
         - name: "use_sim_time"
           value: "$(var use_sim_time)"
@@ -61,9 +61,6 @@ launch:
           value: true
         - name: "node_names"
           value:
-            - "bt_navigator"
-            - "planner_server"
-            - "controller_server"
             - "global_map"
 
   # 3. 全局地图服务
@@ -84,34 +81,11 @@ launch:
       exec: "static_transform_publisher"
       args: "0 0 0 0 0 0 world odom"
 
-  # 5. 导航行为调度
-  - node:
-      pkg: "nav2_bt_navigator"
-      exec: "bt_navigator"
-      name: "bt_navigator"
-      param:
-        - from: "$(var configuration)/motion.yaml"
-        - name: default_nav_to_pose_bt_xml
-          value: "$(var configuration)/motion.xml"
-        - name: "use_sim_time"
-          value: "$(var use_sim_time)"
-
-  # 6. 全局规划 + 全局地图处理
-  - node:
-      pkg: "nav2_planner"
-      exec: "planner_server"
-      name: "planner_server"
-      param:
-        - from: "$(var configuration)/motion.yaml"
-        - name: "use_sim_time"
-          value: "$(var use_sim_time)"
-
-  # 7. 局部规划 + 局部地图处理
-  - node:
-      pkg: "nav2_controller"
-      exec: "controller_server"
-      name: "controller_server"
-      param:
-        - from: "$(var configuration)/motion.yaml"
+  # 5. 运动链路（复用 motion.launch.yaml，自动同步新增特性）
+  - include:
+      file: "$(find-pkg-share rmcs-navigation)/launch/motion.launch.yaml"
+      arg:
+        - name: "configuration"
+          value: "$(var configuration)"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"

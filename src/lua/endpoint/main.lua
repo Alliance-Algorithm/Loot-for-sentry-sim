@@ -2,7 +2,7 @@
 --- Local Context
 ---
 
-local api = require("api")
+local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
 local fsm = require("util.fsm")
@@ -14,117 +14,53 @@ local request = Scheduler.request
 
 local edges = require("util.edge").new()
 
-local NaN = 0 / 0
-local cache = {
-	goal = { x = NaN, y = NaN },
-}
-function cache:send_target()
-	local x = self.goal.x
-	local y = self.goal.y
-	if x ~= x or y ~= y then
-		return
-	end
-	api.send_target(x, y)
-end
-
 ---
 --- Export Context
 ---
 
 blackboard = require("blackboard").singleton()
 
--- @TODO: (creeper5820)
---  框架搭建完成，准备开始填充业务
---  规划如下：
---    使用分层状态机，运动和决策分开，同时引入外部监管，负责
---    监控中断情况，比如血量低，没有弹药等
---  待完成接口（在外部中断中使用）：
---    - fsm:force_switch(state) 不暴露给 handle
---    - fsm:history() 负责中断恢复
---    - handle:history() 规范暴露接口
---    - task:force_resume() 用于跳出等待的挂起状态
 on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
+	option:set_handler(function(error)
+		action:fuck("while fetch option: " .. error)
+	end)
+
 	if option.enable_goal_topic_forward then
-		api.switch_topic_forward(true)
+		action:switch_topic_forward(true)
 	end
 
-	api.info("use decision: '" .. option.decision .. "'")
+	action:bind(scheduler)
+	action:info("use decision: '" .. option.decision .. "'")
 
-	-- 定期更新导航的目标，防止规划失败后停滞
 	scheduler:append_task(function()
-		while true do
-			request:sleep(2.0)
-			cache:send_target()
-		end
-	end)
-
-	-- 立即响应导航点的切换
-	scheduler:append_task(function()
-		local last = { x = cache.goal.x, y = cache.goal.y }
-		while true do
-			local x = cache.goal.x
-			local y = cache.goal.y
-
-			if x ~= last.x or y ~= last.y then
-				cache:send_target()
-			end
-
-			last = { x = x, y = y }
-			request:yield()
-		end
-	end)
-
-	-- 运动状态机
-	scheduler:append_task(function()
-		--- @enum Motion
-		local Motion = {
-			IDLE = "IDLE",
-			FREE = "FREE",
+		local Intent = {
+			nothing = "nothing",
 		}
-		local motion = fsm:new(Motion.FREE)
+		local intent_fsm = fsm:new(Intent.nothing)
 
-		motion:use {
-			state = Motion.FREE,
+		intent_fsm:use {
+			state = Intent.nothing,
 			enter = function()
-				api.info("Enter Motion::FREE")
+				action:warn("⚠️你来到了没有意图的荒原")
 			end,
 			event = function(handle)
-				request:sleep(1)
-				handle:set_next(Motion.IDLE)
+				handle:set_next(Intent.nothing)
 			end,
 		}
-		motion:use {
-			state = Motion.IDLE,
-			enter = function()
-				api.info("Enter Motion::IDLE")
-			end,
-			event = function(handle)
-				request:sleep(1)
-				handle:set_next(Motion.FREE)
-			end,
-		}
-
-		if not motion:init_ready(Motion) then
-			error("Motion 状态机有状态未注册，这是不对的")
+		if intent_fsm:init_ready(Intent) then
+			error("意图状态机没有初始化完全，有未使用的意图")
 		end
 
 		while true do
-			-- motion:spin_once()
+			intent_fsm:spin_once()
 			request:yield()
-		end
-	end)
-
-	-- 决策状态机
-	scheduler:append_task(function()
-		while true do
-			request:sleep(1)
 		end
 	end)
 
 	edges:on(blackboard.getter.rswitch, "UP", function()
-		api.restart_navigation({
+		action:restart_navigation({
 			launch_livox = false,
 			launch_odin1 = false,
 			global_map = "rmul",
@@ -132,7 +68,7 @@ on_init = function()
 		})
 	end)
 
-	api.info(ascii.banner)
+	action:info(ascii.banner)
 end
 
 on_tick = function()
@@ -143,11 +79,11 @@ on_tick = function()
 end
 
 on_exit = function()
-	api.stop_navigation()
+	action:stop_navigation()
 end
 
 --- 由 NAV2 发布的目标速度值，在此处理回调
 on_control = function(vx, vy, qx)
 	local _ = qx
-	api.update_chassis_vel(vx, vy)
+	action:update_chassis_vel(vx, vy)
 end

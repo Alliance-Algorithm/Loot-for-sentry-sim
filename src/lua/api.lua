@@ -14,6 +14,7 @@ local util = require("util.native")
 ---
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)
+--- @field update_gimbal_dominator fun(name: string)
 --- @field update_chassis_mode fun(mode: string)
 --- @field update_chassis_vel fun(x: number, y: number)
 ---
@@ -54,15 +55,18 @@ function api.restart_navigation(config)
 	)
 	local motion_config = string.format("use_sim_time:=%s", use_sim_time)
 
+	-- FIXME: 存在调试用的进程，记得去掉
 	local command = [[
         source %q
         screen -S rmcs-navigation -X quit
 
         screen -dmS rmcs-navigation
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml %s"
+        screen -S rmcs-navigation -X screen bash -lc "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
+
         screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml %s"
+        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml %s"
     ]]
-	local packed_command = string.format(command, filename, sensor_config, motion_config)
+    local packed_command = string.format(command, filename, motion_config, sensor_config)
 
 	return util.run_command(string.format("(%s) >/dev/null 2>&1 &", packed_command))
 end
