@@ -2,7 +2,7 @@ local M = {}
 
 ---@param path string
 ---@return boolean
-function M.file_exists(path)
+function M.exist_filename(path)
 	local file = io.open(path, "r")
 	if file ~= nil then
 		file:close()
@@ -12,7 +12,7 @@ function M.file_exists(path)
 end
 
 ---@return string|nil, string|nil
-function M.find_env_setup_bash()
+function M.search_setup_resource()
 	local home = os.getenv("HOME") or ""
 	local candidate_paths = {
 		home ~= "" and (home .. "/env_setup.bash") or nil,
@@ -20,7 +20,7 @@ function M.find_env_setup_bash()
 	}
 
 	for _, path in ipairs(candidate_paths) do
-		if path ~= nil and M.file_exists(path) then
+		if path ~= nil and M.exist_filename(path) then
 			return path, nil
 		end
 	end
@@ -30,7 +30,7 @@ end
 
 ---@param command string
 ---@return boolean, string
-function M.run_command(command)
+function M.run(command)
 	local escaped_command = command:gsub("'", [['"'"']])
 	local success, reason, code = os.execute("bash -lc '" .. escaped_command .. "'")
 	if success == true or success == 0 then
@@ -39,11 +39,6 @@ function M.run_command(command)
 
 	local message = string.format("command failed: reason=%s, code=%s", tostring(reason), tostring(code))
 	return false, message
-end
-
----@return string|nil, string|nil
-function M.search_setup_filename()
-	return M.find_env_setup_bash()
 end
 
 return M

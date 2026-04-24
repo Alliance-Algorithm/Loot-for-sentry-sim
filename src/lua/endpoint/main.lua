@@ -23,6 +23,9 @@ blackboard = require("blackboard").singleton()
 on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 
+	action:bind(scheduler)
+	action:info("use decision: '" .. option.decision .. "'")
+
 	option:set_handler(function(error)
 		action:fuck("while fetch option: " .. error)
 	end)
@@ -30,9 +33,6 @@ on_init = function()
 	if option.enable_goal_topic_forward then
 		action:switch_topic_forward(true)
 	end
-
-	action:bind(scheduler)
-	action:info("use decision: '" .. option.decision .. "'")
 
 	scheduler:append_task(function()
 		local Intent = {

@@ -28,6 +28,7 @@ end
 blackboard = require("blackboard").singleton()
 
 on_init = function()
+	action:bind(scheduler)
 	action:info(ascii.banner)
 	action:warn("⚠️ TEST 模式，别上场哦")
 

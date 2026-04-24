@@ -24,17 +24,18 @@
 
 launch:
   - arg:
+      name: "use_sim_time"
+      default: "false"
+  - arg:
+      name: "global_map"
+      default: "map"
+
+  - arg:
       name: "configuration"
       default: "$(find-pkg-share rmcs-navigation)/config"
   - arg:
       name: "share_location"
       default: "$(find-pkg-share rmcs-navigation)"
-  - arg:
-      name: "use_sim_time"
-      default: "false"
-  - arg:
-      name: "global_map"
-      default: "rmul"
 
   # 0. 传感侧生命周期管理器（仅管理 map server）
   - node:
@@ -98,3 +99,5 @@ launch:
           value: "$(var configuration)"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"
+        - name: "static_local_map"
+          value: "true"

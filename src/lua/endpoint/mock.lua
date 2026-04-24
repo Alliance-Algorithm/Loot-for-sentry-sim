@@ -25,7 +25,7 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	action:switch_topic_forward(true)
 
-	native.run_command("ros2 launch rmcs-navigation static.launch.yaml &")
+	native.run("ros2 launch rmcs-navigation static.launch.yaml &")
 	action:info("static.launch.yaml launched")
 
 	scheduler:append_task(function()

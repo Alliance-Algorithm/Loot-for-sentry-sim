@@ -1,5 +1,5 @@
-#include "navigation.hh"
-#include "util/node_mixin.hh"
+#include "cxx/util/navigation/navigation.hh"
+#include "cxx/util/node_mixin.hh"
 
 #include <chrono>
 #include <cmath>

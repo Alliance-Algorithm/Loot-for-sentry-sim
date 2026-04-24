@@ -38,7 +38,7 @@ local api = setmetatable({}, {
 function api.restart_navigation(config)
 	config = config or {}
 
-	local filename, msg = util.find_env_setup_bash()
+	local filename, msg = util.search_setup_resource()
 	if not filename then
 		error(msg)
 	end
@@ -71,14 +71,14 @@ function api.restart_navigation(config)
     ]]
 	local packed_command = string.format(command, filename, configs)
 
-	return util.run_command(string.format("(%s) >/dev/null 2>&1 &", packed_command))
+	return util.run(string.format("(%s) >/dev/null 2>&1 &", packed_command))
 end
 
 function api.stop_navigation()
 	local command = [[
         screen -S rmcs-navigation -X quit
     ]]
-	return util.run_command(string.format("(%s) >/dev/null 2>&1 &", command))
+	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
 end
 
 return api

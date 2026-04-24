@@ -16,20 +16,23 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(Eigen3 REQUIRED)
+find_package(Lua 5.4 REQUIRED)
+find_package(PCL REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(pcl_conversions REQUIRED)
+
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-find_package(nav2_msgs REQUIRED)
-find_package(PCL REQUIRED)
-
-find_package(geometry_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
-find_package(rmcs_msgs REQUIRED)
-find_package(ament_index_cpp REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(Lua 5.4 REQUIRED)
 
 find_package(rmcs_executor REQUIRED)
+
+find_package(nav2_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rmcs_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -49,13 +52,14 @@ target_compile_features(
 target_sources(
     ${PROJECT_NAME}
     PRIVATE
+        src/cxx/util/localization/engine.cc
+        src/cxx/util/navigation/navigation.cc
         src/cxx/context.cc
-        src/cxx/navigation.cc
         src/cxx/component.cc
 )
 target_include_directories(
     ${PROJECT_NAME}
-    PRIVATE
+    SYSTEM PRIVATE
         ${PROJECT_SOURCE_DIR}/src/
         ${rmcs_executor_INCLUDE_DIRS}
         ${geometry_msgs_INCLUDE_DIRS}
@@ -65,7 +69,10 @@ target_include_directories(
         ${tf2_ros_INCLUDE_DIRS}
         ${rclcpp_action_INCLUDE_DIRS}
         ${nav2_msgs_INCLUDE_DIRS}
+        ${sensor_msgs_INCLUDE_DIRS}
+        ${pcl_conversions_INCLUDE_DIRS}
         ${LUA_INCLUDE_DIR}
+        ${PCL_INCLUDE_DIRS}
 )
 target_link_libraries(
     ${PROJECT_NAME}
@@ -84,6 +91,8 @@ target_link_libraries(
         ${tf2_ros_LIBRARIES}
         ${rclcpp_action_LIBRARIES}
         ${nav2_msgs_LIBRARIES}
+        ${sensor_msgs_LIBRARIES}
+        ${pcl_conversions_LIBRARIES}
 )
 
 find_package(pluginlib REQUIRED)

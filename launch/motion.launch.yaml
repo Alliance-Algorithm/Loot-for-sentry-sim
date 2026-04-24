@@ -5,6 +5,9 @@ launch:
   - arg:
       name: "use_sim_time"
       default: "false"
+  - arg:
+      name: "static_local_map"
+      default: "false"
 
   # 0. 生命周期管理器
   - node:
@@ -51,5 +54,7 @@ launch:
       name: "controller_server"
       param:
         - from: "$(var configuration)/motion.yaml"
+        - name: "local_costmap.local_costmap.static_layer.map_subscribe_transient_local"
+          value: "$(var static_local_map)"
         - name: "use_sim_time"
           value: "$(var use_sim_time)"

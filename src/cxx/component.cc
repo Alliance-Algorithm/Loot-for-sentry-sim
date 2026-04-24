@@ -5,7 +5,7 @@
 #endif
 
 #include "cxx/context.hh"
-#include "cxx/navigation.hh"
+#include "cxx/util/navigation/navigation.hh"
 #include "cxx/util/node_mixin.hh"
 #include <filesystem>
 
