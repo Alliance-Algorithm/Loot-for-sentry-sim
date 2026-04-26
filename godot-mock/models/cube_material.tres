@@ -1,6 +1,6 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://cbwgleagikdfb"]
 
-[ext_resource type="Texture2D" uid="uid://dodhbatwmlp07" path="res://models/white_wood.png" id="1"]
+[ext_resource type="Texture2D" uid="uid://dodhbatwmlp07" path="res://material/white_wood.png" id="1"]
 
 [resource]
 resource_name = "Material"

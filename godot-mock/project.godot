@@ -13,7 +13,7 @@ config_version=5
 config/name="Rm"
 run/main_scene="uid://dxbfgcfrit2k7"
 config/features=PackedStringArray("4.6", "Forward Plus")
-config/icon="res://icon.svg"
+config/icon="res://models/icon.svg"
 
 [input]
 

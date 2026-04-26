@@ -3,7 +3,7 @@
 [ext_resource type="Material" uid="uid://cbwgleagikdfb" path="res://models/cube_material.tres" id="2_316cc"]
 [ext_resource type="Script" uid="uid://c88svvsnwlpo3" path="res://scene/character_body_3d.gd" id="2_hk3fa"]
 [ext_resource type="Script" uid="uid://dkbfp0i2ppdrp" path="res://scene/sim_sidecar_client.gd" id="4_k1qk3"]
-[ext_resource type="PackedScene" uid="uid://syfeopdpojh0" path="res://rmuc.glb" id="5_fq2p7"]
+[ext_resource type="PackedScene" uid="uid://syfeopdpojh0" path="res://models/rmuc.glb" id="5_fq2p7"]
 [ext_resource type="Script" uid="uid://biptn8maovcqt" path="res://scene/enemy.gd" id="5_rwmqo"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_k1qk3"]
@@ -295,7 +295,7 @@ navigation_mesh = SubResource("NavigationMesh_rwmqo")
 [node name="RMUC" parent="NavigationRegion3D" unique_id=698774227 instance=ExtResource("5_fq2p7")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.648)
 
-[node name="RMUC2026" parent="NavigationRegion3D/RMUC" index="0" unique_id=1609153888]
+[node name="RMUC2026" parent="NavigationRegion3D/RMUC" index="0" unique_id=1467846358]
 transform = Transform3D(0.001, 0, 0, 0, 0, -0.001, 0, 0.001, 0, 10.151, 1.536, 0)
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="NavigationRegion3D" unique_id=1055745221]
