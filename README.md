@@ -44,6 +44,11 @@ cd rmcs_ws/src/rmcs-navigation-deps/rmcs-navigation
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
+# 也可用ros（以ros2为例） 
+colcon build --packages-select rmcs-navigation
+source /opt/ros/jazzy/setup.zsh
+
+source install/setup.zsh
 ```
 
 Godot 编辑器：
@@ -58,11 +63,6 @@ Godot 编辑器：
 ### 3.1 启动 Lua Sidecar
 
 ```bash
-colcon build --packages-select rmcs-navigation
-
-source /opt/ros/jazzy/setup.zsh
-source install/setup.zsh
-
 ./install/lib/rmcs-navigation/rmcs-navigation-sim-sidecar \
     --host 0.0.0.0 \
     --port 34567 \
