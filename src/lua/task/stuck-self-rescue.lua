@@ -37,13 +37,13 @@ local function normalize_options(options)
 		monitor_interval = options.monitor_interval or 0.1,
 		stall_window = options.stall_window or 1.2,
 		min_progress = options.min_progress or 0.05,
-		goal_tolerance = options.goal_tolerance or 0.15,
-		stuck_ignore_tolerance = options.stuck_ignore_tolerance or 0.35,
+		goal_tolerance = options.goal_tolerance or 0.4,
+		stuck_ignore_tolerance = options.stuck_ignore_tolerance or 0.4,
 		max_rescue_attempts = options.max_rescue_attempts or 2,
 		rescue_side_offset = options.rescue_side_offset or 0.6,
 		rescue_backtrack = options.rescue_backtrack or 0.4,
 		rescue_point_timeout = options.rescue_point_timeout or 2.5,
-		rescue_point_tolerance = options.rescue_point_tolerance or 0.15,
+		rescue_point_tolerance = options.rescue_point_tolerance or 0.4,
 	}
 
 	assert(type(result.timeout) == "number" and result.timeout > 0, "timeout should be positive")

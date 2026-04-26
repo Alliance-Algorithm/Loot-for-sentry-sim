@@ -10,7 +10,7 @@ local function normalize_options(options)
 	options = options or {}
 	assert(type(options) == "table", "options should be a table")
 
-	local tolerance = options.tolerance or 0.3
+	local tolerance = options.tolerance or 0.4
 	if type(tolerance) == "number" then
 		assert(tolerance >= 0, "tolerance should be non-negative")
 	else

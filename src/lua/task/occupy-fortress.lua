@@ -16,7 +16,7 @@ return function(ours_zone)
 	end
 
 	local is_success = navigate_to_point(fortress, {
-		tolerance = 0.3,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not is_success then

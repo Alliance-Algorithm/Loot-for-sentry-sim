@@ -31,7 +31,7 @@ return function(ours_zone, forward_center)
 	end
 
 	local ok = navigate_to_point(from, {
-		tolerance = 0.3,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not ok then
@@ -46,7 +46,7 @@ return function(ours_zone, forward_center)
 	end
 
 	ok = navigate_to_point(to, {
-		tolerance = 0.3,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not ok then

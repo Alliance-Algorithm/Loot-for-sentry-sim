@@ -20,7 +20,7 @@ return function(ours_zone)
 	end
 
 	local ok = navigate_to_point(road_begin, {
-		tolerance = 0.3,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not ok then
@@ -29,7 +29,7 @@ return function(ours_zone)
 	end
 
 	ok = navigate_to_point(road_final, {
-		tolerance = 0.3,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not ok then
