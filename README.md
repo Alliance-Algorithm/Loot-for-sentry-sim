@@ -44,7 +44,6 @@ cd rmcs_ws/src/rmcs-navigation-deps/rmcs-navigation
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
-# 产物：build/rmcs-navigation-sim-sidecar
 ```
 
 Godot 编辑器：
@@ -79,7 +78,7 @@ source install/setup.zsh
 
 ### 3.3 运行仿真
 
-1. 点击 Godot 调试面板的 **"Start Decision"** 按钮（或按回车键）
+1. 点击 Godot 调试面板，按回车键，仿真程序运行，Lua和godot双段信息共享
 2. Lua 端将进入 `idle → start_cruise → keep_cruise` FSM 状态机
 3. AI 机器人（灰色）会自动沿 NavMesh 导航到目标点
 4. 敌方机器人（红色）可用 WASD 操控，J 键射击，空格跳跃
