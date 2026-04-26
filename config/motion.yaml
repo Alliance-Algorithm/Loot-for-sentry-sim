@@ -43,6 +43,25 @@ global_costmap:
         inflation_radius: 0.3
         cost_scaling_factor: 0.5
 
+behavior_server:
+  ros__parameters:
+    global_frame: world
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    plugins: ["spin", "backup", "wait"]
+    
+    spin:
+      plugin: "nav2_behaviors::Spin"   
+    backup:
+      plugin: "nav2_behaviors::BackUp"  
+    wait:
+      plugin: "nav2_behaviors::Wait"    
+    
+    local_costmap_topic: local_costmap/costmap_raw
+    local_footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    simulate_ahead_time: 2.0
+    
 # 局部地图 + 局部规划
 controller_server:
   ros__parameters:

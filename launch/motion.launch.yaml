@@ -20,6 +20,7 @@ launch:
           value:
             - "bt_navigator"
             - "planner_server"
+            - "behavior_server"
             - "controller_server"
 
   # 1. 导航行为调度
@@ -49,6 +50,15 @@ launch:
       pkg: "nav2_controller"
       exec: "controller_server"
       name: "controller_server"
+      param:
+        - from: "$(var configuration)/motion.yaml"
+        - name: "use_sim_time"
+          value: "$(var use_sim_time)"
+
+  - node:
+      pkg: "nav2_behaviors"
+      exec: "behavior_server"
+      name: "behavior_server"
       param:
         - from: "$(var configuration)/motion.yaml"
         - name: "use_sim_time"

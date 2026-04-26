@@ -1,0 +1,169 @@
+# 导航行为调度
+bt_navigator:
+  ros__parameters:
+    global_frame: world
+    robot_base_frame: base_link
+    navigators: ["navigate_to_pose"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+
+# 全局地图 + 全局规划
+planner_server:
+  ros__parameters:
+    global_frame: world
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner::SmacPlanner2D"
+      allow_unknown: true
+      downsample_costmap: false
+      tolerance: 0.25
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 0.2
+      cost_travel_multiplier: 6.0
+      use_final_approach_orientation: false
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      initial_transform_timeout: 120.0
+      global_frame: world
+      robot_base_frame: base_link
+      footprint: "[[0.2475, 0.2475], [0.2475, -0.2475], [-0.2475, -0.2475], [-0.2475, 0.2475]]"
+      update_frequency: 5.0
+      publish_frequency: 5.0
+      always_send_full_costmap: true
+      plugins: ["static_layer", "inflation_layer"]
+
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_topic: "/map"
+        map_subscribe_transient_local: true
+        subscribe_to_updates: true
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.36
+        cost_scaling_factor: 2.0
+
+# 局部地图 + 局部规划
+controller_server:
+  ros__parameters:
+    global_frame: world
+    controller_frequency: 20.0
+
+    # 进度检查，超时没有移动会导向导航事件失败
+    progress_checker_plugin: "progress_checker"
+    current_progress_checker: "progress_checker"
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.08
+      movement_time_allowance: 4.0
+
+    # 目标检查，一般不检查旋转角
+    goal_checker_plugins: ["general_goal_checker"]
+    current_goal_checker: "general_goal_checker"
+    general_goal_checker:
+      plugin: "nav2_controller::PositionGoalChecker"
+      xy_goal_tolerance: 0.2
+
+    # 布局规划核心
+    controller_plugins: ["FollowPath"]
+    FollowPath:
+      plugin: "nav2_mppi_controller::MPPIController"
+      motion_model: "Omni"
+      time_steps: 50
+      model_dt: 0.05
+      batch_size: 1400
+      iteration_count: 1
+      prune_distance: 6.0
+      transform_tolerance: 0.1
+      regenerate_noises: true
+      retry_attempt_limit: 6
+      visualize: true
+
+      # 速度与加速度限制
+      vx_max: +2.2
+      vx_min: -2.0
+      vy_max: +2.2
+      vy_min: -2.0
+      wz_max: +0.001
+      ax_max: +20.0
+      ax_min: -20.0
+      ay_max: +20.0
+      ay_min: -20.0
+      az_max: +0.001
+
+      # 采样噪声，鼓励左右探索
+      vx_std: 0.55
+      vy_std: 0.55
+      wz_std: 0.001
+      temperature: 0.34
+      gamma: 0.015
+
+      critics:
+        [
+          "ConstraintCritic",
+          "CostCritic",
+          "GoalCritic",
+          "PathAlignCritic",
+          "PathFollowCritic",
+        ]
+
+      ConstraintCritic.enabled: true
+      ConstraintCritic.cost_weight: 5.0
+
+      CostCritic.enabled: true
+      CostCritic.cost_weight: 16.0
+      CostCritic.critical_cost: 120.0
+      CostCritic.collision_cost: 8000000.0
+      CostCritic.near_collision_cost: 253
+      CostCritic.cost_power: 2
+      CostCritic.consider_footprint: true
+      CostCritic.near_goal_distance: 0.8
+      CostCritic.trajectory_point_step: 1
+
+      GoalCritic.enabled: true
+      GoalCritic.cost_weight: 4.5
+      GoalCritic.threshold_to_consider: 1.2
+
+      PathAlignCritic.enabled: true
+      PathAlignCritic.cost_weight: 0.8
+      PathAlignCritic.threshold_to_consider: 1.0
+      PathAlignCritic.trajectory_point_step: 3
+
+      PathFollowCritic.enabled: true
+      PathFollowCritic.cost_weight: 3.2
+      PathFollowCritic.threshold_to_consider: 1.5
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      initial_transform_timeout: 120.0
+      global_frame: base_link
+      robot_base_frame: base_link
+      footprint: "[[0.2475, 0.2475], [0.2475, -0.2475], [-0.2475, -0.2475], [-0.2475, 0.2475]]"
+      update_frequency: 10.0
+      publish_frequency: 10.0
+      always_send_full_costmap: true
+      rolling_window: true
+      width: 16
+      height: 16
+      resolution: 0.04
+      transform_tolerance: 0.1
+      track_unknown_space: false
+      plugins: [static_layer, inflation_layer]
+
+      static_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        map_topic: /local_map
+        map_subscribe_transient_local: false
+        subscribe_to_updates: true
+        use_maximum: true
+        track_unknown_space: false
+        lethal_cost_threshold: 90
+
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        inflation_radius: 0.35
+        cost_scaling_factor: 1.0

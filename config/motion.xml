@@ -54,25 +54,27 @@
 
       </PipelineSequence>
 
-
       <!-- 全局恢复子树。 -->
       <!-- 这里只保留清图恢复；一旦目标更新，立刻退出恢复并回到导航主链。 -->
       <ReactiveFallback name="RecoveryFallback">
-
         <GoalUpdated/>
-
         <!-- 先清空局部代价地图，再清空全局代价地图。 -->
-        <Sequence name="ClearingActions">
-          <ClearEntireCostmap
-            name="ClearLocalCostmap-Subtree"
-            service_name="local_costmap/clear_entirely_local_costmap"/>
-          <ClearEntireCostmap
-            name="ClearGlobalCostmap-Subtree"
-            service_name="global_costmap/clear_entirely_global_costmap"/>
-        </Sequence>
+        <RoundRobin name="RecoveryActions">
+          <!-- A 先清空局部代价地图，再清空全局代价地图。 -->
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap
+              name="ClearLocalCostmap-Subtree"
+              service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap
+              name="ClearGlobalCostmap-Subtree"
+              service_name="global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="0.3"/>
+          </Sequence>
+          <!-- B 后退 -->  
+          <BackUp backup_dist="0.8" backup_speed="0.5"/> 
+        </RoundRobin>
 
       </ReactiveFallback>
-
 
     </RecoveryNode>
   </BehaviorTree>

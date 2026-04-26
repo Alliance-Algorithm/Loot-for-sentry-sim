@@ -1,0 +1,84 @@
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <!-- 顶层导航恢复节点。 -->
+    <!-- 导航主链失败后进入全局恢复；收到新目标时可随时打断恢复流程。 -->
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+
+      <!-- 导航主链：选择检查器 -> 周期性全局规划 -> 局部路径跟踪。 -->
+      <PipelineSequence name="NavigateWithReplanning">
+
+        <!-- 选择当前使用的进度检查器。 -->
+        <ProgressCheckerSelector
+          selected_progress_checker="{selected_progress_checker}"
+          default_progress_checker="progress_checker"
+          topic_name="progress_checker_selector"/>
+
+        <!-- 选择当前使用的目标检查器。 -->
+        <GoalCheckerSelector
+          selected_goal_checker="{selected_goal_checker}"
+          default_goal_checker="general_goal_checker"
+          topic_name="goal_checker_selector"/>
+
+        <!-- 以固定频率重算全局路径，避免在树 tick 频率下反复触发规划。 -->
+        <RateController hz="1.0">
+
+          <!-- 全局规划子树。 -->
+          <!-- 规划失败时清空全局代价地图；若目标更新，则立即放弃当前恢复。 -->
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+
+            <ReactiveFallback name="ComputePathToPoseRecoveryFallback">
+              <GoalUpdated/>
+
+              <ClearEntireCostmap
+                name="ClearGlobalCostmap-Context"
+                service_name="global_costmap/clear_entirely_global_costmap"/>
+            </ReactiveFallback>
+          </RecoveryNode>
+
+        </RateController>
+
+        <!-- 局部跟踪子树。 -->
+        <!-- 跟踪失败时清空局部代价地图；若目标更新，则立即切换到新目标。 -->
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+
+          <ReactiveFallback name="FollowPathRecoveryFallback">
+            <GoalUpdated/>
+
+            <ClearEntireCostmap
+              name="ClearLocalCostmap-Context"
+              service_name="local_costmap/clear_entirely_local_costmap"/>
+          </ReactiveFallback>
+        </RecoveryNode>
+
+      </PipelineSequence>
+
+
+      <!-- 全局恢复子树。 -->
+      <!-- 这里只保留清图恢复；一旦目标更新，立刻退出恢复并回到导航主链。 -->
+      <ReactiveFallback name="RecoveryFallback">
+
+
+        <GoalUpdated/>
+        <!-- 先清空局部代价地图，再清空全局代价地图。 -->
+        <RoundRobin name="RecoveryActions">
+          <!-- A 先清空局部代价地图，再清空全局代价地图。 -->
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap
+              name="ClearLocalCostmap-Subtree"
+              service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap
+              name="ClearGlobalCostmap-Subtree"
+              service_name="global_costmap/clear_entirely_global_costmap"/>
+            <Wait wait_duration="0.3"/>
+          </Sequence>
+          <!-- B 后退 -->  
+          <BackUp backup_dist="0.8" backup_speed="0.5"/> 
+        </RoundRobin>
+
+
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

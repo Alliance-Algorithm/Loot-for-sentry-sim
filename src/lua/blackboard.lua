@@ -9,9 +9,9 @@ local function create_default_blackboard()
 	local result = {
 		-- Dynamic Information
 		user = {
-			health = 0,
-			bullet = 0,
-			chassis_power_limit = 0,
+			health = 400,
+			bullet =100,
+			chassis_power_limit = 100,
 			x = 0,
 			y = 0,
 			yaw = 0,
@@ -26,6 +26,7 @@ local function create_default_blackboard()
 		meta = {
 			timestamp = 0, -- 秒
 		},
+		result = {},
 
 		-- Static Information
 		rule = {

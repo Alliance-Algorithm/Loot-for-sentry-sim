@@ -1,151 +1,159 @@
-# RMCS NAVIGATION
+# Lua-Godot 哨兵决策仿真
 
-## 0. 基本架构
+## 1. 简介
 
-`RMCS-NAVIGATION` 是一个 RoboMaster 哨兵机器人自主导航决策系统，采用 C++ 和 Lua 开发主要逻辑，该程序以 [RMCS 控制系统插件](https://github.com/Alliance-Algorithm/RMCS) 的形式运行，由 RMCS 提供运行时与上下文，由 ROS Navigation 提供导航能力，Lua 开发决策
+本项目为 **RoboMaster 哨兵机器人** 的自主导航决策系统提供一套离线仿真环境，基于以下两层实现：
 
-- `Component`：获取机器人状态，裁判系统等信息，提供运动控制接口，以及为 Lua 侧提供运行时
-- `ROS Navigation`：Nav2 堆栈的纯配置与启动文件，负责路径规划及其他导航相关能力
-- `Lua Decision`：在 `component` 的 update 中自旋，其热重载特性和原生协程支持有利于决策的快速迭代开发
+- **C++ 仿真 Sidecar** (`sim_sidecar.cc`)：内嵌 Lua 5.4 运行时（通过 sol2 绑定），作为 TCP 服务器承接 Godot 客户端与 Lua 决策脚本之间的双向状态同步与遥控指令转发。
+- **Godot 4.6 3D 战场模拟器** (`godot-mock/`)：使用 Jolt Physics 引擎，提供 RMUC 场地模型、NavMesh 导航网格、敌我双机器人（带装甲板受击判定、子弹弹道、云台自瞄/扫描）、补给区、调试 UI 面板，通过 TCP 连接到 C++ Sidecar。
 
-## 1. 快速入门
+整体架构：**Godot 模拟器 ← TCP → C++ Sidecar (Lua VM) → Lua 决策脚本 (`train-decision.lua`)**。
 
-### 信息流与调用链总览
+Lua 端复用了 `rmcs-navigation` 实车导航框架的核心组件（FSM 状态机、协程调度器、blackboard 状态共享、Intent/Task 任务分解），在纯仿真环境下验证哨兵的自主巡航、避险回血、地形通过等决策逻辑。
 
-![Call Chain](doc/call-chain.svg)
+---
 
-### Component (C++ 侧)
+## 2. 环境依赖
 
-一个最小的可运行示例如下：
+### 2.1 编译 C++ Sidecar
 
-```yaml
-# rmcs_bringup/config/navigation.yaml
-rmcs_executor:
-  ros__parameters:
-    update_rate: 1000.0
-    components:
-      - rmcs::navigation::Navigation -> rmcs_navigation
+| 依赖 | 版本/来源 | 说明 |
+|------|----------|------|
+| Lua | 5.4 | Lua 运行时 |
+| sol2 | v3.5.0 (CMake FetchContent) | C++ Lua 绑定库 |
+| yaml-cpp | 系统包 | YAML 配置解析 |
+| CMake | 3.28+ | 构建系统 |
+| C++ 编译器 | GCC 13+ / Clang 17+ | C++23 标准 |
 
-rmcs_navigation:
-  ros__parameters:
-    # 策略名称：
-    # - fast-push-output "速推前哨站"
-    # - kill-robots "杀伤优先"
-    decision: "fast-push-output"
-    command_vel_name: "/cmd_vel_smoothed"
-    mock_context: true
-    endpoint: "main"
-    enable_goal_topic_forward: true
+### 2.2 运行 Godot 项目
+
+| 依赖 | 版本 | 说明 |
+|------|------|------|
+| Godot Engine | 4.6+ | 编辑器或运行时 |
+| Jolt Physics | 内置于 Godot 项目 | 物理引擎 |
+
+### 2.3 安装
+
+编译 C++ Sidecar：
+
+```bash
+# 进入 rmcs-navigation 目录
+cd rmcs_ws/src/rmcs-navigation-deps/rmcs-navigation
+
+# CMake 构建（无需 ROS 环境）
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+
+# 产物：build/rmcs-navigation-sim-sidecar
 ```
 
-构建使用如下指令在本机启动：
-```zsh
-ros2 launch rmcs_bringup rmcs.launch.py robot:=navigation
+Godot 编辑器：
+
+- 从 [Godot 官网](https://godotengine.org/) 下载 Godot 4.6+ 版本
+- 用 Godot 编辑器打开 `godot-mock/project.godot`
+
+---
+
+## 3. Quick Start
+
+### 3.1 启动 Lua Sidecar
+
+```bash
+colcon build --packages-select rmcs-navigation
+
+source /opt/ros/jazzy/setup.zsh
+source install/setup.zsh
+
+./install/lib/rmcs-navigation/rmcs-navigation-sim-sidecar \
+    --host 0.0.0.0 \
+    --port 34567 \
+    --endpoint train-decision
 ```
 
-### Decision (Lua 侧)
+### 3.2 启动 Godot 模拟器
 
-#### 1. 基本思想
+1. 用 Godot 编辑器打开 `godot-mock/project.godot`
+2. 点击 **Run** (F5) 启动 `battlefiled.tscn` 主场景
+3. Godot 将自动连接到 `127.0.0.1:34567` 的 C++ Sidecar
+4. 连接成功后，左上角会出现 `Lua Sim v1` 调试面板
 
-将任务拆解成可复现，可单测的最小示例，例如，对于开局后前往巡逻点的任务，我们将其拆分为
+### 3.3 运行仿真
 
-```
-核心任务：进行巡航打击
+1. 点击 Godot 调试面板的 **"Start Decision"** 按钮（或按回车键）
+2. Lua 端将进入 `idle → start_cruise → keep_cruise` FSM 状态机
+3. AI 机器人（灰色）会自动沿 NavMesh 导航到目标点
+4. 敌方机器人（红色）可用 WASD 操控，J 键射击，空格跳跃
 
-0. 从起始点前往公路区前（起伏路段）
-{
-  a. 将导航目标点设置到公路区前
-  b. 阻塞检查坐标，直到到达目的地
-}
+### 3.4 仿真控制
 
-1. 跨越起伏路段（begin -> final）
-{
-  a. 设置底盘跟随
-  b. 设置云台与起伏路段垂直
-  c. 切换底盘至起伏路段模式
-  d. 开始导航至起伏路段对面
-}
+- **手动操控敌方**：WASD 移动，J 射击，空格跳跃，Tab 切换视角
+- **调试面板**：查看 blackboard 所有字段，实时编辑 HP/Bullet/Stage/Switch
+- **补给区**：AI 进入补给区后自动回血/回弹（超控 Lua 端 blackboard）
+- **云台模式**：Lua 可通过 `sim.gimbal_dominator` 指令切换 `scan` (扫描) / `auto` (自动瞄准) / `manual` (手动)
 
-2. 进入巡航模式
-{
-  a. 开启小陀螺
-  b. 设置云台为扫描模式
-  c. 循环
-    - 到达点1
-    - 看看狗洞
-    - 到达点2
-    - 看看前哨站
-    - 下一次循环
-}
-```
+---
 
-我们或许有这样的文件结构：
-```
-lua/
-  intent/                       意图，核心任务，是下面迷你任务的组合
-    start-cruise.lua            > 开始巡航
+## 4. 现有功能
 
-  task/                         迷你任务
-    navigate-to.lua             > 导航至（普通事件，不涉及地形跨越）
-    crossing-road-zone.lua      > 跨越公路区
-    cruise-loop.lua             > 巡航进行时
+### 4.1 Lua 决策仿真
 
-  endpoint/                     接入点
-    main.lua                    > 比赛用的接入点，是正式入口
-    test.lua                    > 测试用的，随便改动
-```
+模拟实车部署的完整决策流水线：
 
-对于线下调试，我们可以直接把小任务（比如从起始点前往公路区前）注册进调度器，再绑定一个遥控器触发信号为开始，手动触发该事件，单独测试
+| 模块 | 文件 | 功能 |
+|------|------|------|
+| **FSM 状态机** | `endpoint/train-decision.lua` | 五状态流转：idle → start_cruise → keep_cruise → escape → recover |
+| **开始巡航** | `intent/start-cruise-train.lua` | 调用 `task/crossing-road-zone-train.lua`，从当前位置→公路区起点→公路区终点 |
+| **持续巡航** | `intent/keep-cruise.lua` | 调用 `task/cruise-in-central-highlands.lua`，在中央高地两点间按固定周期往返导航 |
+| **避险回家** | `intent/escape-to-home.lua` | 血量/弹药不足时自动导航回补给区，支持导航队列回溯（判断是否需要先下台阶） |
+| **协程调度器** | `util/scheduler.lua` | 基于协程的任务编排：`append_task` / `yield` / `sleep` / `wait_until` |
+| **Blackboard 同步** | `blackboard_sync.lua` | 6 个分节（user/game/play/meta/rule/result）的深拷贝快照与递归合并 |
+| **导航任务** | `task/navigate-to-point.lua` | 单点导航，支持容差/超时参数 |
+| **条件判断** | `blackboard.lua` | 暴露 `condition.low_health()`、`condition.low_bullet()`、`condition.near()` 等 |
+| **动作层** | `action.lua` | `navigate()`、`update_chassis_vel()`、`switch_topic_forward()` 等运行时 API |
 
-```lua
+### 4.2 FSM 状态流转
 
-on_init = function()
-  ...
-  -- 右拨杆向上的触发事件
-  edges:on(blackboard.getter.rswitch, "UP", function()
-    --- 触发一个小任务
-    scheduler:append_task(function()
-      -- 小任务可以是阻塞的，使用协程可以很轻松处理多个
-      -- 语义上阻塞任务的并行，使用线性语义描述业务是美妙的
-      crossing_road_zone {
-        begin = {x = 0, y = 0},
-        final = {x = 3, y = 0},
-      }
-
-      -- 再回来
-      crossing_road_zone {
-        begin = {x = 3, y = 0},
-        final = {x = 0, y = 0},
-      }
-	  end)
-	end)
-  ...
-end
-
+```text
+idle ──(收到 start 命令 & 游戏已开始)──→ start_cruise
+start_cruise ──(任务完成)──→ keep_cruise
+start_cruise ──(血/弹不足)──→ escape
+keep_cruise ──(血/弹不足)──→ escape
+escape ──(抵达补给点)──→ recover
+recover ──(血量 & 弹药充足)──→ start_cruise
 ```
 
+### 4.3 Godot 战场模拟
 
-#### 2. 框架使用
+- **NavMesh 导航**：RMUC 场地模型上烘培的 NavMesh，AI 通过 `NavigationAgent3D` 寻路
+- **装甲板受击**：4 块装甲板独立碰撞检测，友军伤害过滤
+- **子弹弹道**：匀速直线 + 重力下坠，超时/命中自毁
+- **底盘小陀螺**：模拟底盘小陀螺，用于保持机器人朝向，可通过action调用切换模式
+- **云台系统**：scan 模式（射线扫描 + 可视化）、auto 模式（锁定最近装甲板 + 自动射击），可通过action调用
+- **补给区**：进入 `resupply_radius` 范围后按速率回复 HP 和子弹，同步到 Lua blackboard
+- **调试面板**：实时显示 blackboard 6 大分节、FSM 状态、连接状态、超控模式
 
-> 该框架的核心目标，是将高层决策与底层执行明确分离：最上层由 `endpoint` 根据当前局势持续观察和判断，在运行中决定机器人此刻应当采取什么意图，例如继续推进、回防基地或撤退补血；意图一旦确定，再被拆解为可顺序执行、可组合的任务流程；这些任务不直接调用底层能力，通过 `action` 这一层发起具体动作，由它封装运行时状态并收口到底层 `api`；与此同时，整个过程依赖 `blackboard` 提供共享的世界状态与上下文信息。
+### 4.4 TCP 协议
 
-对于接入点（endpoint），需要暴露以下接口：
+| 方向 | 消息类型 | 说明 |
+|------|---------|------|
+| Godot → C++ | `sim.hello` | 握手 (protocol=1, mode=lua_sim_v1) |
+| Godot → C++ | `sim.input` | 周期性上报机器人位姿 (x, y, yaw) 和资源 (health, bullet) |
+| C++ → Godot | `sim.blackboard` | 全量同步 blackboard（带 `bb_rev` 版本号去重） |
+| C++ → Godot | `sim.decision_state` | 决策状态快照 |
+| C++ → Godot | `sim.nav_target` | 导航目标点更新 |
+| C++ → Godot | `sim.chassis_mode` | 底盘模式 (idle/spin) |
+| C++ → Godot | `sim.gimbal_dominator` | 云台控制源 (manual/scan/auto) |
+| C++ → Godot | `sim.gimbal_direction` | 云台手动朝向 |
+| C++ → Godot | `sim.chassis_vel` | 底盘速度超控 |
+| Godot → C++ | `sim.override_mode` | 超控模式开关 |
+| Godot → C++ | `sim.override_patch` | 超控补丁（手动修改 blackboard 值） |
+| Godot → C++ | `sim.command` | 控制命令 (start_decision) |
+| C++ → Godot | `sim.log` | Lua 日志透传 |
 
-```lua
--- 状态黑板
-blackboard
+---
 
--- Lua 侧的初始化
-on_init
+## 5. TODO List
 
--- 10Hz 的更新 Tick
-on_tick
-
--- 退出时的 Hook
-on_exit (optional)
-
--- 收到来自 nav2 的控制 Topic 的回调
-on_control
-```
-
-TODO: 未完待续
+- [ ] **高地/起伏路段物理**：上一级台阶（`go-down-onestep.lua` 等 task 已编写但未在 Godot 中完整体现），起伏路段未搭建
+- [ ] **死亡/复活可视化**：AI 机器人死亡后 hide + 复活时 respawn，当前仅停止移动，无视觉特效
+- [ ] **灵活射击**：当前由人工操控的 Enemy无法旋转视角功能，Lua自主控制机器人发射机构无法灵活瞄准
