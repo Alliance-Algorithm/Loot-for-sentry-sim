@@ -75,7 +75,7 @@ return function(ours_zone)
 	end
 
 	is_success = navigate_to_point(resupply_zone, {
-		tolerance = 0.3,
+		tolerance = 0.4,
 		timeout = 20,
 	})
 	if not is_success then

@@ -149,7 +149,7 @@ shape = SubResource("BoxShape3D_k1qk3")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="CharacterBody3D" unique_id=1467279966]
 path_desired_distance = 0.5
-target_desired_distance = 0.1
+target_desired_distance = 0.2
 path_postprocessing = 1
 radius = 0.3
 max_speed = 5.0
