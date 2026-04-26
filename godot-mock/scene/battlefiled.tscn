@@ -358,4 +358,9 @@ vertices = PackedVector3Array(-1.0992756, 0, -1.9357076, 1.3942451, 0, -1.836871
 affect_navigation_mesh = true
 carve_navigation_mesh = true
 
+[node name="NavigationLink3D" type="NavigationLink3D" parent="NavigationRegion3D" unique_id=627531415]
+bidirectional = false
+start_position = Vector3(4.4, 0.3, 6)
+end_position = Vector3(4.4, 0, 4.5)
+
 [editable path="NavigationRegion3D/RMUC"]

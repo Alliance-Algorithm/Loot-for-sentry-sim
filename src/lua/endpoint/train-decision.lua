@@ -189,8 +189,8 @@ local function configure_test_rule()
 	rule.road_zone_final.ours = { x = 6.5, y = 6.5 }
 	rule.fluctuant_road_begin.ours = { x = 2.5, y = 6.5 }
 	rule.fluctuant_road_final.ours = { x = 5.5, y = 6.5 }
-	rule.one_step_begin.ours = { x = 4.4, y = 6.2 }
-	rule.one_step_final.ours = { x = 4.4, y = 4.6 }
+	rule.one_step_begin.ours = { x = 4.4, y = 6 }
+	rule.one_step_final.ours = { x = 4.4, y = 4.5 }
 	rule.central_highland_near_crossing_road.ours = { x = 8.8, y = 4.0 }
 	rule.central_highland_near_doghole.ours = { x = 10.5, y = -4.0 }
 end
