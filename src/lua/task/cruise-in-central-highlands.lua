@@ -50,6 +50,7 @@ return function(ours_zone, switch_interval)
 			return false
 		end
 
+		action:update_gimbal_dominator("auto")
 
 		-- 保持固定切换周期：若提前到达，则驻留到本周期结束后再切点。
 		local elapsed = clock:now() - phase_start
