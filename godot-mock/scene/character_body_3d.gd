@@ -39,12 +39,17 @@ extends CharacterBody3D
 @export var respawn_delay := 5.0
 ## 复活时恢复的血量。
 @export var respawn_health := 25
+## 复活后护盾持续时间 (s)。
+@export var respawn_shield_duration := 3.0
 ## 外部速度超控的有效持有时长 (s)。
 @export var control_hold_seconds := 0.2
 
 const TEAM := "ally"
 const BULLET_SCRIPT := preload("res://scene/sim_bullet.gd")
 const ARMOR_SCRIPT := preload("res://scene/sim_armor.gd")
+const DEATH_FX_DURATION := 0.6
+const SHIELD_PULSE_SPEED := 0.006
+const SHIELD_PULSE_SCALE := 0.06
 ## 四块装甲板的子节点路径（用于挂载受击判定 Area）。
 const ARMOR_NODE_PATHS := [
 	"chassis/ban1/zhuangjia1",
@@ -71,6 +76,7 @@ var hp := max_health
 var bullet := spawn_bullet
 var is_dead := false
 var dead_left := 0.0
+var respawn_shield_left := 0.0
 
 ## 敌方机器人引用，供云台自动瞄准使用。
 var enemy_target: Node3D = null
@@ -79,20 +85,33 @@ var enemy_target: Node3D = null
 var scan_ray: RayCast3D = null
 ## 扫描射线的调试可视化线条（动态 ImmediateMesh）。
 var scan_line: MeshInstance3D = null
+## 死亡特效 Tween。
+var death_fx_tween: Tween = null
+## 护盾效果基准缩放。
+var shield_fx_base_scale := Vector3.ONE
+## 死亡特效基准缩放。
+var death_burst_fx_base_scale := Vector3.ONE
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var chassis_node: Node3D = $chassis
 @onready var gimbal_top_yaw: Node3D = $gimbal/top_yaw
 @onready var shooter_node: Node3D = $gimbal/top_yaw/shooter
+@onready var shield_fx: MeshInstance3D = $ShieldFX
+@onready var death_burst_fx: MeshInstance3D = $DeathBurstFX
 
 
 func _ready() -> void:
 	_setup_scan_tools()
 	_setup_armor_hitboxes()
+	shield_fx_base_scale = shield_fx.scale
+	death_burst_fx_base_scale = death_burst_fx.scale
+	_set_shield_fx_active(false)
+	_reset_death_fx()
 
 
 func _physics_process(delta: float) -> void:
 	_tick_death(delta)
+	_tick_respawn_shield(delta)
 
 	fire_cooldown_left = max(fire_cooldown_left - delta, 0.0)
 	if external_chassis_vel_ttl > 0.0:
@@ -171,7 +190,7 @@ func sync_resources_from_blackboard(health: Variant, bullet_value: Variant) -> v
 
 ## 受到子弹伤害，血量归零时进入死亡状态。
 func apply_damage(amount: int, _armor_name: String = "") -> void:
-	if is_dead:
+	if is_dead or _has_respawn_shield():
 		return
 	var next_hp : int= hp - max(amount, 0)
 	hp = maxi(0, next_hp)
@@ -278,7 +297,7 @@ func _tick_auto_mode(delta: float) -> void:
 	current_scan_speed = move_toward(current_scan_speed, 0.0, gimbal_scan_accel * delta)
 	var lock := _track_enemy(delta)
 	_update_scan_ray_visual(false)
-	if lock and fire_cooldown_left <= 0.0 and bullet > 0:
+	if lock and _can_fire():
 		_fire_bullet(TEAM)
 		bullet -= 1
 		fire_cooldown_left = auto_fire_cooldown
@@ -395,6 +414,34 @@ func _hide_scan_line() -> void:
 		scan_line.visible = false
 
 
+func _has_respawn_shield() -> bool:
+	return respawn_shield_left > 0.0
+
+
+func _tick_respawn_shield(delta: float) -> void:
+	if is_dead:
+		if respawn_shield_left > 0.0:
+			respawn_shield_left = 0.0
+		_set_shield_fx_active(false)
+		return
+
+	if respawn_shield_left <= 0.0:
+		_set_shield_fx_active(false)
+		return
+
+	respawn_shield_left = max(respawn_shield_left - delta, 0.0)
+	if respawn_shield_left <= 0.0:
+		_set_shield_fx_active(false)
+		return
+
+	_set_shield_fx_active(true)
+	_update_shield_fx_visual()
+
+
+func _can_fire() -> bool:
+	return not is_dead and not _has_respawn_shield() and fire_cooldown_left <= 0.0 and bullet > 0
+
+
 func _setup_armor_hitboxes() -> void:
 	for path in ARMOR_NODE_PATHS:
 		var armor_mesh := get_node_or_null(path)
@@ -418,23 +465,115 @@ func _tick_death(delta: float) -> void:
 func _enter_death_state() -> void:
 	is_dead = true
 	dead_left = respawn_delay
+	respawn_shield_left = 0.0
 	velocity = Vector3.ZERO
 	current_chassis_spin_speed = 0.0
 	current_scan_speed = 0.0
 	fire_cooldown_left = 0.0
 	chassis_mode = "idle"
 	gimbal_dominator = "manual"
+	_set_shield_fx_active(false)
+	_play_death_fx()
 
 
 func _respawn() -> void:
 	is_dead = false
 	hp = respawn_health
+	respawn_shield_left = respawn_shield_duration
 	velocity = Vector3.ZERO
 	chassis_mode = "idle"
 	gimbal_dominator = "manual"
 	current_chassis_spin_speed = 0.0
 	current_scan_speed = 0.0
 	_hide_scan_line()
+	_set_shield_fx_active(respawn_shield_left > 0.0)
+
+
+func _set_shield_fx_active(active: bool) -> void:
+	if shield_fx == null:
+		return
+
+	shield_fx.visible = active
+	if active:
+		_update_shield_fx_visual()
+		return
+
+	shield_fx.scale = shield_fx_base_scale
+	var shield_mat: StandardMaterial3D = shield_fx.material_override as StandardMaterial3D
+	if shield_mat != null:
+		var shield_color: Color = shield_mat.albedo_color
+		shield_color.a = 0.24
+		shield_mat.albedo_color = shield_color
+		shield_mat.emission_energy_multiplier = 1.8
+
+
+func _update_shield_fx_visual() -> void:
+	if shield_fx == null or not shield_fx.visible:
+		return
+
+	var pulse_phase: float = float(Time.get_ticks_msec()) * SHIELD_PULSE_SPEED
+	var pulse: float = 0.5 + 0.5 * sin(pulse_phase)
+	shield_fx.scale = shield_fx_base_scale * (1.0 + SHIELD_PULSE_SCALE * pulse)
+
+	var shield_mat: StandardMaterial3D = shield_fx.material_override as StandardMaterial3D
+	if shield_mat != null:
+		var shield_color: Color = shield_mat.albedo_color
+		shield_color.a = lerpf(0.18, 0.34, pulse)
+		shield_mat.albedo_color = shield_color
+		shield_mat.emission_energy_multiplier = lerpf(1.4, 2.2, pulse)
+
+
+func _play_death_fx() -> void:
+	if death_burst_fx == null:
+		return
+
+	if death_fx_tween != null:
+		death_fx_tween.kill()
+		death_fx_tween = null
+
+	_reset_death_fx()
+	death_burst_fx.visible = true
+	var death_mat: StandardMaterial3D = death_burst_fx.material_override as StandardMaterial3D
+	if death_mat != null:
+		death_mat.emission_energy_multiplier = 2.6
+		_set_death_fx_alpha(0.9)
+
+	death_fx_tween = create_tween()
+	death_fx_tween.set_parallel(true)
+	death_fx_tween.tween_property(
+		death_burst_fx, "scale", death_burst_fx_base_scale * 3.0, DEATH_FX_DURATION
+	).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	death_fx_tween.tween_method(_set_death_fx_alpha, 0.9, 0.0, DEATH_FX_DURATION)
+	death_fx_tween.chain().tween_callback(_reset_death_fx)
+
+
+func _set_death_fx_alpha(alpha: float) -> void:
+	if death_burst_fx == null:
+		return
+
+	var death_mat: StandardMaterial3D = death_burst_fx.material_override as StandardMaterial3D
+	if death_mat == null:
+		return
+
+	var death_color: Color = death_mat.albedo_color
+	death_color.a = alpha
+	death_mat.albedo_color = death_color
+	death_mat.emission_energy_multiplier = 2.6 * alpha
+
+
+func _reset_death_fx() -> void:
+	if death_burst_fx == null:
+		return
+
+	death_burst_fx.visible = false
+	death_burst_fx.scale = death_burst_fx_base_scale
+	var death_mat: StandardMaterial3D = death_burst_fx.material_override as StandardMaterial3D
+	if death_mat != null:
+		var death_color: Color = death_mat.albedo_color
+		death_color.a = 0.0
+		death_mat.albedo_color = death_color
+		death_mat.emission_energy_multiplier = 0.0
+	death_fx_tween = null
 
 
 func look_at_target(target_pos: Vector3, turn_speed: float) -> void:
