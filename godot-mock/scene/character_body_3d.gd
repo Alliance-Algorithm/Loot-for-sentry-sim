@@ -35,6 +35,8 @@ extends CharacterBody3D
 @export var max_health := 400
 ## 初始子弹数。
 @export var spawn_bullet := 100
+## 初始金币数。
+@export var spawn_gold := 0
 ## 死亡后到复活的时间间隔 (s)。
 @export var respawn_delay := 5.0
 ## 复活时恢复的血量。
@@ -50,6 +52,15 @@ const ARMOR_SCRIPT := preload("res://scene/sim_armor.gd")
 const DEATH_FX_DURATION := 0.6
 const SHIELD_PULSE_SPEED := 0.006
 const SHIELD_PULSE_SCALE := 0.06
+const HEALTH_BAR_ANCHOR_NAME := "HealthBarAnchor"
+const HEALTH_BAR_BACK_NAME := "HealthBarBack"
+const HEALTH_BAR_FILL_NAME := "HealthBarFill"
+const HEALTH_BAR_HEIGHT := 1.0
+const HEALTH_BAR_BACK_SIZE := Vector2(1.1, 0.14)
+const HEALTH_BAR_FILL_SIZE := Vector2(1.0, 0.10)
+const HEALTH_BAR_BACK_PRIORITY := 10
+const HEALTH_BAR_FILL_PRIORITY := 11
+const HEALTH_BAR_FILL_Z_OFFSET := -0.02
 ## 四块装甲板的子节点路径（用于挂载受击判定 Area）。
 const ARMOR_NODE_PATHS := [
 	"chassis/ban1/zhuangjia1",
@@ -74,6 +85,7 @@ var fire_cooldown_left := 0.0
 
 var hp := max_health
 var bullet := spawn_bullet
+var gold := spawn_gold
 var is_dead := false
 var dead_left := 0.0
 var respawn_shield_left := 0.0
@@ -91,6 +103,12 @@ var death_fx_tween: Tween = null
 var shield_fx_base_scale := Vector3.ONE
 ## 死亡特效基准缩放。
 var death_burst_fx_base_scale := Vector3.ONE
+## 头顶血条锚点。
+var health_bar_anchor: Node3D = null
+## 头顶血条背景。
+var health_bar_back: MeshInstance3D = null
+## 头顶血条红条。
+var health_bar_fill: MeshInstance3D = null
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var chassis_node: Node3D = $chassis
@@ -103,10 +121,13 @@ var death_burst_fx_base_scale := Vector3.ONE
 func _ready() -> void:
 	_setup_scan_tools()
 	_setup_armor_hitboxes()
+	_setup_health_bar()
 	shield_fx_base_scale = shield_fx.scale
 	death_burst_fx_base_scale = death_burst_fx.scale
 	_set_shield_fx_active(false)
 	_reset_death_fx()
+	_update_health_bar()
+	_face_health_bar_to_camera()
 
 
 func _physics_process(delta: float) -> void:
@@ -135,6 +156,8 @@ func _physics_process(delta: float) -> void:
 
 	if is_dead:
 		_hide_scan_line()
+
+	_face_health_bar_to_camera()
 
 
 ## 设置敌方目标引用，供云台自动瞄准使用。
@@ -176,16 +199,24 @@ func get_sim_resource_state() -> Dictionary:
 	return {
 		"health": hp,
 		"bullet": bullet,
+		"gold": gold,
 		"dead": is_dead,
 	}
 
 
-## 用 blackboard 传来的生命/子弹值同步本机资源。
-func sync_resources_from_blackboard(health: Variant, bullet_value: Variant) -> void:
+## 用 blackboard 传来的生命/子弹/金币值同步本机资源。
+func sync_resources_from_blackboard(
+	health: Variant,
+	bullet_value: Variant,
+	gold_value: Variant = null
+) -> void:
 	if health != null:
 		hp = clampi(int(round(float(health))), 0, max_health)
 	if bullet_value != null:
 		bullet = maxi(0, int(round(float(bullet_value))))
+	if gold_value != null:
+		gold = maxi(0, int(round(float(gold_value))))
+	_update_health_bar()
 
 
 ## 受到子弹伤害，血量归零时进入死亡状态。
@@ -194,6 +225,7 @@ func apply_damage(amount: int, _armor_name: String = "") -> void:
 		return
 	var next_hp : int= hp - max(amount, 0)
 	hp = maxi(0, next_hp)
+	_update_health_bar()
 	if hp <= 0:
 		_enter_death_state()
 
@@ -454,6 +486,81 @@ func _setup_armor_hitboxes() -> void:
 		area.set("owner_robot_path", area.get_path_to(self))
 
 
+func _setup_health_bar() -> void:
+	health_bar_anchor = get_node_or_null(HEALTH_BAR_ANCHOR_NAME) as Node3D
+	if health_bar_anchor == null:
+		health_bar_anchor = Node3D.new()
+		health_bar_anchor.name = HEALTH_BAR_ANCHOR_NAME
+		health_bar_anchor.position = Vector3(0.0, HEALTH_BAR_HEIGHT, 0.0)
+		add_child(health_bar_anchor)
+
+	health_bar_back = health_bar_anchor.get_node_or_null(HEALTH_BAR_BACK_NAME) as MeshInstance3D
+	if health_bar_back == null:
+		health_bar_back = MeshInstance3D.new()
+		health_bar_back.name = HEALTH_BAR_BACK_NAME
+		var back_mesh := QuadMesh.new()
+		back_mesh.size = HEALTH_BAR_BACK_SIZE
+		health_bar_back.mesh = back_mesh
+		health_bar_back.material_override = _build_health_bar_material(
+			Color(0.08, 0.08, 0.08, 1.0),
+			HEALTH_BAR_BACK_PRIORITY
+		)
+		health_bar_anchor.add_child(health_bar_back)
+
+	health_bar_fill = health_bar_anchor.get_node_or_null(HEALTH_BAR_FILL_NAME) as MeshInstance3D
+	if health_bar_fill == null:
+		health_bar_fill = MeshInstance3D.new()
+		health_bar_fill.name = HEALTH_BAR_FILL_NAME
+		var fill_mesh := QuadMesh.new()
+		fill_mesh.size = HEALTH_BAR_FILL_SIZE
+		health_bar_fill.mesh = fill_mesh
+		health_bar_fill.material_override = _build_health_bar_material(
+			Color(0.92, 0.12, 0.12, 1.0),
+			HEALTH_BAR_FILL_PRIORITY
+		)
+		health_bar_fill.position = Vector3(0.0, 0.0, HEALTH_BAR_FILL_Z_OFFSET)
+		health_bar_anchor.add_child(health_bar_fill)
+
+
+func _build_health_bar_material(color: Color, priority: int) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.no_depth_test = true
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = priority
+	material.albedo_color = color
+	return material
+
+
+func _update_health_bar() -> void:
+	if health_bar_anchor == null or health_bar_back == null or health_bar_fill == null:
+		return
+
+	var ratio: float = 0.0
+	if max_health > 0:
+		ratio = clampf(float(hp) / float(max_health), 0.0, 1.0)
+
+	health_bar_fill.scale = Vector3(ratio, 1.0, 1.0)
+	health_bar_fill.position = Vector3(
+		-0.5 * HEALTH_BAR_FILL_SIZE.x * (1.0 - ratio),
+		0.0,
+		HEALTH_BAR_FILL_Z_OFFSET
+	)
+
+
+func _face_health_bar_to_camera() -> void:
+	if health_bar_anchor == null:
+		return
+
+	var camera: Camera3D = get_viewport().get_camera_3d()
+	if camera == null:
+		return
+
+	health_bar_anchor.look_at(camera.global_position, Vector3.UP, true)
+
+
 func _tick_death(delta: float) -> void:
 	if not is_dead:
 		return
@@ -487,6 +594,7 @@ func _respawn() -> void:
 	current_scan_speed = 0.0
 	_hide_scan_line()
 	_set_shield_fx_active(respawn_shield_left > 0.0)
+	_update_health_bar()
 
 
 func _set_shield_fx_active(active: bool) -> void:

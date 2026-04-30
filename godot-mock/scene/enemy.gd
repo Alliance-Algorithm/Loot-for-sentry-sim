@@ -54,6 +54,15 @@ const AUTO_AIM_COARSE_PITCH_SAMPLES := 41
 const AUTO_AIM_REFINEMENT_ROUNDS := 2
 const AUTO_AIM_REFINEMENT_SAMPLES := 9
 const AUTO_AIM_SIM_FALLBACK_HZ := 60.0
+const HEALTH_BAR_ANCHOR_NAME := "HealthBarAnchor"
+const HEALTH_BAR_BACK_NAME := "HealthBarBack"
+const HEALTH_BAR_FILL_NAME := "HealthBarFill"
+const HEALTH_BAR_HEIGHT := 2.35
+const HEALTH_BAR_BACK_SIZE := Vector2(1.1, 0.14)
+const HEALTH_BAR_FILL_SIZE := Vector2(1.0, 0.10)
+const HEALTH_BAR_BACK_PRIORITY := 10
+const HEALTH_BAR_FILL_PRIORITY := 11
+const HEALTH_BAR_FILL_Z_OFFSET := -0.02
 ## 四块装甲板的子节点路径（用于挂载受击判定 Area）。
 const ARMOR_NODE_PATHS := [
 	"chassis/ban1/zhuangjia1",
@@ -85,6 +94,12 @@ var auto_aim_solution_pitch := 0.0
 var auto_aim_sim_step_dt: float = 1.0 / AUTO_AIM_SIM_FALLBACK_HZ
 ## 左键仅用于重新捕获鼠标时，阻止本次按下同时触发射击。
 var consume_left_click_fire_until_release := false
+## 头顶血条锚点。
+var health_bar_anchor: Node3D = null
+## 头顶血条背景。
+var health_bar_back: MeshInstance3D = null
+## 头顶血条红条。
+var health_bar_fill: MeshInstance3D = null
 
 @onready var gimbal_yaw_node: Node3D = $gimbal
 @onready var top_yaw_node: Node3D = $gimbal/top_yaw
@@ -95,12 +110,15 @@ var consume_left_click_fire_until_release := false
 
 func _ready() -> void:
 	_setup_armor_hitboxes()
+	_setup_health_bar()
 	yaw_angle = gimbal_yaw_node.rotation.y
 	pitch_angle = pitch_pivot.rotation.z
 	var physics_ticks: float = float(ProjectSettings.get_setting("physics/common/physics_ticks_per_second"))
 	if physics_ticks > 0.0:
 		auto_aim_sim_step_dt = 1.0 / physics_ticks
 	_sync_mouse_capture()
+	_update_health_bar()
+	_face_health_bar_to_camera()
 
 
 func _physics_process(delta: float) -> void:
@@ -111,6 +129,7 @@ func _physics_process(delta: float) -> void:
 	if dead:
 		velocity = Vector3.ZERO
 		move_and_slide()
+		_face_health_bar_to_camera()
 		return
 
 	_tick_movement(delta)
@@ -119,6 +138,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	# 记录空格状态，用于下一帧检测"刚刚按下"。
 	jump_key_was_down = Input.is_key_pressed(KEY_SPACE)
+	_face_health_bar_to_camera()
 
 
 ## 受到子弹伤害，血量归零时进入死亡状态。
@@ -126,6 +146,7 @@ func apply_damage(amount: int, _armor_name: String = "") -> void:
 	if dead:
 		return
 	hp = maxi(0, hp - max(amount, 0))
+	_update_health_bar()
 	if hp <= 0:
 		dead = true
 		velocity = Vector3.ZERO
@@ -485,6 +506,81 @@ func _setup_armor_hitboxes() -> void:
 		area.set("armor_name", str(path.get_file()))
 		armor_mesh.add_child(area)
 		area.set("owner_robot_path", area.get_path_to(self))
+
+
+func _setup_health_bar() -> void:
+	health_bar_anchor = get_node_or_null(HEALTH_BAR_ANCHOR_NAME) as Node3D
+	if health_bar_anchor == null:
+		health_bar_anchor = Node3D.new()
+		health_bar_anchor.name = HEALTH_BAR_ANCHOR_NAME
+		health_bar_anchor.position = Vector3(0.0, HEALTH_BAR_HEIGHT, 0.0)
+		add_child(health_bar_anchor)
+
+	health_bar_back = health_bar_anchor.get_node_or_null(HEALTH_BAR_BACK_NAME) as MeshInstance3D
+	if health_bar_back == null:
+		health_bar_back = MeshInstance3D.new()
+		health_bar_back.name = HEALTH_BAR_BACK_NAME
+		var back_mesh := QuadMesh.new()
+		back_mesh.size = HEALTH_BAR_BACK_SIZE
+		health_bar_back.mesh = back_mesh
+		health_bar_back.material_override = _build_health_bar_material(
+			Color(0.08, 0.08, 0.08, 1.0),
+			HEALTH_BAR_BACK_PRIORITY
+		)
+		health_bar_anchor.add_child(health_bar_back)
+
+	health_bar_fill = health_bar_anchor.get_node_or_null(HEALTH_BAR_FILL_NAME) as MeshInstance3D
+	if health_bar_fill == null:
+		health_bar_fill = MeshInstance3D.new()
+		health_bar_fill.name = HEALTH_BAR_FILL_NAME
+		var fill_mesh := QuadMesh.new()
+		fill_mesh.size = HEALTH_BAR_FILL_SIZE
+		health_bar_fill.mesh = fill_mesh
+		health_bar_fill.material_override = _build_health_bar_material(
+			Color(0.92, 0.12, 0.12, 1.0),
+			HEALTH_BAR_FILL_PRIORITY
+		)
+		health_bar_fill.position = Vector3(0.0, 0.0, HEALTH_BAR_FILL_Z_OFFSET)
+		health_bar_anchor.add_child(health_bar_fill)
+
+
+func _build_health_bar_material(color: Color, priority: int) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.no_depth_test = true
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.render_priority = priority
+	material.albedo_color = color
+	return material
+
+
+func _update_health_bar() -> void:
+	if health_bar_anchor == null or health_bar_back == null or health_bar_fill == null:
+		return
+
+	var ratio: float = 0.0
+	if max_health > 0:
+		ratio = clampf(float(hp) / float(max_health), 0.0, 1.0)
+
+	health_bar_fill.scale = Vector3(ratio, 1.0, 1.0)
+	health_bar_fill.position = Vector3(
+		-0.5 * HEALTH_BAR_FILL_SIZE.x * (1.0 - ratio),
+		0.0,
+		HEALTH_BAR_FILL_Z_OFFSET
+	)
+
+
+func _face_health_bar_to_camera() -> void:
+	if health_bar_anchor == null:
+		return
+
+	var camera: Camera3D = get_viewport().get_camera_3d()
+	if camera == null:
+		return
+
+	health_bar_anchor.look_at(camera.global_position, Vector3.UP, true)
 
 
 ## 输入处理：检测相机切换动作。

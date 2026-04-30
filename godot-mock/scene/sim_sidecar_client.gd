@@ -19,6 +19,10 @@ extends Node
 @export var resupply_health_rate := 100.0
 ## 每秒回复子弹数。
 @export var resupply_bullet_rate := 150.0
+## 被动金币发放间隔（秒）。
+@export var passive_gold_interval := 30.0
+## 每次被动发放的金币数量。
+@export var passive_gold_amount := 50
 ## AI 机器人节点路径。
 @export var robot_path: NodePath
 ## 导航目标点节点路径。
@@ -66,6 +70,8 @@ var override_enabled := false
 var manual_override_enabled := false
 ## 自动补给超控是否激活。
 var auto_resupply_override_enabled := false
+## 被动金币同步时使用的临时超控状态。
+var auto_gold_override_enabled := false
 ## 超控补丁的序号。
 var override_rev := 0
 ## UI 控件防递归更新标志。
@@ -80,6 +86,8 @@ var resupply_distance: Variant = null
 var auto_resupply_health_buffer := 0.0
 ## 子弹回复累计缓冲区。
 var auto_resupply_bullet_buffer := 0.0
+## 距离下一次被动金币发放的剩余时间。
+var passive_gold_left := passive_gold_interval
 ## 是否已从 blackboard 初始化机器人资源。
 var robot_resource_initialized := false
 
@@ -90,9 +98,11 @@ var override_toggle: CheckButton
 var edit_box: VBoxContainer
 var hp_spin: SpinBox
 var bullet_spin: SpinBox
+var gold_spin: SpinBox
 var stage_select: OptionButton
 var rswitch_select: OptionButton
 var lswitch_select: OptionButton
+var gold_badge_value_label: Label
 
 
 func _ready() -> void:
@@ -126,12 +136,14 @@ func _process(_delta: float) -> void:
 		override_enabled = false
 		manual_override_enabled = false
 		auto_resupply_override_enabled = false
+		auto_gold_override_enabled = false
 		override_rev = 0
 		in_resupply_zone = false
 		auto_resupply_active = false
 		resupply_distance = null
 		auto_resupply_health_buffer = 0.0
 		auto_resupply_bullet_buffer = 0.0
+		passive_gold_left = passive_gold_interval
 		robot_resource_initialized = false
 		if override_toggle != null:
 			override_toggle.set_pressed_no_signal(false)
@@ -157,11 +169,14 @@ func _process(_delta: float) -> void:
 			override_enabled = false
 			manual_override_enabled = false
 			auto_resupply_override_enabled = false
+			auto_gold_override_enabled = false
+			override_rev = 0
 			in_resupply_zone = false
 			auto_resupply_active = false
 			resupply_distance = null
 			auto_resupply_health_buffer = 0.0
 			auto_resupply_bullet_buffer = 0.0
+			passive_gold_left = passive_gold_interval
 			robot_resource_initialized = false
 			if override_toggle != null:
 				override_toggle.set_pressed_no_signal(false)
@@ -203,11 +218,36 @@ func _physics_process(delta: float) -> void:
 
 	sim_time += delta
 	send_accum += delta
+	_tick_passive_gold(delta)
 	_update_auto_resupply(delta)
 
 	if send_accum >= 1.0 / send_hz:
 		send_accum = 0.0
 		_send_input()
+
+
+func _tick_passive_gold(delta: float) -> void:
+	if not blackboard_ready or passive_gold_interval <= 0.0 or passive_gold_amount <= 0:
+		return
+
+	passive_gold_left -= delta
+	if passive_gold_left > 0.0:
+		return
+
+	var period_count: int = int(floor(-passive_gold_left / passive_gold_interval)) + 1
+	passive_gold_left += passive_gold_interval * float(period_count)
+
+	var user: Dictionary = _get_dict_value(blackboard, "user")
+	var current_gold: int = int(round(_get_numeric_value(user.get("gold", 0), 0.0)))
+	var next_gold: int = current_gold + passive_gold_amount * period_count
+	var patch_user: Dictionary = {"gold": next_gold}
+	var patch: Dictionary = {"user": patch_user}
+	_apply_local_patch(patch)
+	_apply_robot_user_patch(patch_user)
+	_set_auto_gold_override_enabled(true)
+	_send_override_patch(patch)
+	_set_auto_gold_override_enabled(false)
+	_refresh_display()
 
 
 ## 输入处理：检测"开始决策"动作 (sim_start_decision) 或回车键。
@@ -242,6 +282,7 @@ func _handle_message(msg: Dictionary) -> void:
 		blackboard_rev = rev
 		blackboard = payload.duplicate(true)
 		blackboard_ready = true
+		_ensure_gold_field_initialized()
 		# 首次收到 blackboard 时初始化机器人资源。
 		_sync_robot_resources_from_blackboard_once()
 		# 将 blackboard 控制字段同步到 UI 控件。
@@ -306,6 +347,7 @@ func _send_input() -> void:
 			"yaw": robot.global_rotation.y,
 			"health": int(resource.get("health", 0)),
 			"bullet": int(resource.get("bullet", 0)),
+			"gold": int(resource.get("gold", 0)),
 		},
 		"meta": {
 			"timestamp": sim_time,
@@ -339,7 +381,7 @@ func _send_override_mode(enabled: bool) -> void:
 
 ## 合并手动超控和自动补给超控的状态，仅在变化时发送。
 func _sync_override_mode(force: bool = false) -> void:
-	var enabled := manual_override_enabled or auto_resupply_override_enabled
+	var enabled := manual_override_enabled or auto_resupply_override_enabled or auto_gold_override_enabled
 	if not force and override_enabled == enabled:
 		return
 
@@ -366,6 +408,15 @@ func _set_auto_resupply_override_enabled(enabled: bool) -> void:
 	if not enabled:
 		auto_resupply_health_buffer = 0.0
 		auto_resupply_bullet_buffer = 0.0
+	_sync_override_mode()
+
+
+## 切换金币同步使用的临时超控状态。
+func _set_auto_gold_override_enabled(enabled: bool) -> void:
+	if auto_gold_override_enabled == enabled:
+		return
+
+	auto_gold_override_enabled = enabled
 	_sync_override_mode()
 
 
@@ -626,6 +677,73 @@ func _build_debug_ui() -> void:
 	override_toggle.toggled.connect(_on_override_toggled)
 	root.add_child(override_toggle)
 
+	var gold_badge := PanelContainer.new()
+	gold_badge.name = "GoldBadge"
+	gold_badge.anchor_left = 1.0
+	gold_badge.anchor_right = 1.0
+	gold_badge.anchor_top = 0.0
+	gold_badge.anchor_bottom = 0.0
+	gold_badge.offset_left = -220
+	gold_badge.offset_top = 16
+	gold_badge.offset_right = -16
+	gold_badge.offset_bottom = 78
+	var gold_badge_style := StyleBoxFlat.new()
+	gold_badge_style.bg_color = Color(0.14, 0.11, 0.03, 0.94)
+	gold_badge_style.border_width_left = 2
+	gold_badge_style.border_width_top = 2
+	gold_badge_style.border_width_right = 2
+	gold_badge_style.border_width_bottom = 2
+	gold_badge_style.border_color = Color(1.0, 0.82, 0.16, 1.0)
+	gold_badge_style.corner_radius_top_left = 16
+	gold_badge_style.corner_radius_top_right = 16
+	gold_badge_style.corner_radius_bottom_right = 16
+	gold_badge_style.corner_radius_bottom_left = 16
+	gold_badge.add_theme_stylebox_override("panel", gold_badge_style)
+	canvas.add_child(gold_badge)
+
+	var gold_badge_margin := MarginContainer.new()
+	gold_badge_margin.add_theme_constant_override("margin_left", 14)
+	gold_badge_margin.add_theme_constant_override("margin_top", 10)
+	gold_badge_margin.add_theme_constant_override("margin_right", 14)
+	gold_badge_margin.add_theme_constant_override("margin_bottom", 10)
+	gold_badge.add_child(gold_badge_margin)
+
+	var gold_badge_row := HBoxContainer.new()
+	gold_badge_row.add_theme_constant_override("separation", 12)
+	gold_badge_margin.add_child(gold_badge_row)
+
+	var coin_mark := Panel.new()
+	coin_mark.custom_minimum_size = Vector2(28, 28)
+	var coin_mark_style := StyleBoxFlat.new()
+	coin_mark_style.bg_color = Color(1.0, 0.83, 0.18, 1.0)
+	coin_mark_style.border_width_left = 2
+	coin_mark_style.border_width_top = 2
+	coin_mark_style.border_width_right = 2
+	coin_mark_style.border_width_bottom = 2
+	coin_mark_style.border_color = Color(1.0, 0.94, 0.56, 1.0)
+	coin_mark_style.corner_radius_top_left = 14
+	coin_mark_style.corner_radius_top_right = 14
+	coin_mark_style.corner_radius_bottom_right = 14
+	coin_mark_style.corner_radius_bottom_left = 14
+	coin_mark.add_theme_stylebox_override("panel", coin_mark_style)
+	gold_badge_row.add_child(coin_mark)
+
+	var gold_badge_text := VBoxContainer.new()
+	gold_badge_text.add_theme_constant_override("separation", 0)
+	gold_badge_row.add_child(gold_badge_text)
+
+	var gold_title := Label.new()
+	gold_title.text = "GOLD"
+	gold_title.add_theme_font_size_override("font_size", 12)
+	gold_title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.34, 0.95))
+	gold_badge_text.add_child(gold_title)
+
+	gold_badge_value_label = Label.new()
+	gold_badge_value_label.text = "0"
+	gold_badge_value_label.add_theme_font_size_override("font_size", 24)
+	gold_badge_value_label.add_theme_color_override("font_color", Color(1.0, 0.95, 0.74, 1.0))
+	gold_badge_text.add_child(gold_badge_value_label)
+
 	edit_box = VBoxContainer.new()
 	edit_box.visible = false
 	edit_box.add_theme_constant_override("separation", 6)
@@ -636,6 +754,9 @@ func _build_debug_ui() -> void:
 
 	bullet_spin = _add_spin_row(edit_box, "Bullet", 0.0, 500.0, 1.0)
 	bullet_spin.value_changed.connect(_on_bullet_changed)
+
+	gold_spin = _add_spin_row(edit_box, "Gold", 0.0, 99999.0, 1.0)
+	gold_spin.value_changed.connect(_on_gold_changed)
 
 	stage_select = _add_option_row(edit_box, "Stage", STAGE_VALUES)
 	stage_select.item_selected.connect(_on_stage_selected)
@@ -745,6 +866,21 @@ func _on_bullet_changed(value: float) -> void:
 	_refresh_display()
 
 
+## UI 回调：金币数值改变 → 推送超控补丁。
+func _on_gold_changed(value: float) -> void:
+	if ui_updating:
+		return
+
+	var patch: Dictionary = {"user": {"gold": int(round(value))}}
+	_apply_local_patch(patch)
+	var user_patch: Dictionary = patch["user"]
+	_apply_robot_user_patch(user_patch)
+	_set_auto_gold_override_enabled(true)
+	_send_override_patch(patch)
+	_set_auto_gold_override_enabled(false)
+	_refresh_display()
+
+
 ## UI 回调：Stage 选择改变 → 推送 game.stage。
 func _on_stage_selected(index: int) -> void:
 	if ui_updating:
@@ -793,6 +929,7 @@ func _sync_controls_from_blackboard() -> void:
 
 	hp_spin.value = float(user.get("health", hp_spin.value))
 	bullet_spin.value = float(user.get("bullet", bullet_spin.value))
+	gold_spin.value = float(user.get("gold", gold_spin.value))
 
 	_select_option_value(stage_select, STAGE_VALUES, str(game.get("stage", "UNKNOWN")))
 	_select_option_value(rswitch_select, SWITCH_VALUES, str(play.get("rswitch", "UNKNOWN")))
@@ -814,6 +951,23 @@ func _refresh_display() -> void:
 		decision_label.text = _format_decision_text()
 	if blackboard_label != null:
 		blackboard_label.text = _format_blackboard_text()
+	_refresh_gold_badge()
+
+
+func _refresh_gold_badge() -> void:
+	if gold_badge_value_label == null:
+		return
+
+	gold_badge_value_label.text = str(_get_current_gold_value())
+
+
+func _get_current_gold_value() -> int:
+	var user: Dictionary = _get_dict_value(blackboard, "user")
+	if user.has("gold"):
+		return int(round(_get_numeric_value(user.get("gold", 0), 0.0)))
+
+	var resource: Dictionary = _get_robot_resource_state()
+	return int(round(_get_numeric_value(resource.get("gold", 0), 0.0)))
 
 
 ## 格式化决策状态文本（JSON 美观输出）。
@@ -930,7 +1084,7 @@ func _apply_robot_chassis_vel(x: float, y: float) -> void:
 		robot.call("set_external_chassis_velocity", x, y)
 
 
-## 从 AI 机器人获取当前模拟资源状态（血量、子弹、死亡状态）。
+## 从 AI 机器人获取当前模拟资源状态（血量、子弹、金币、死亡状态）。
 func _get_robot_resource_state() -> Dictionary:
 	if robot.has_method("get_sim_resource_state"):
 		var resource = robot.call("get_sim_resource_state")
@@ -939,29 +1093,52 @@ func _get_robot_resource_state() -> Dictionary:
 	return {
 		"health": 0,
 		"bullet": 0,
+		"gold": 0,
 	}
 
 
-## 首次收到 blackboard 时，用其中的血量/子弹值初始化机器人状态。
+func _ensure_gold_field_initialized() -> void:
+	var user: Dictionary = _get_dict_value(blackboard, "user")
+	if user.has("gold"):
+		return
+
+	var resource: Dictionary = _get_robot_resource_state()
+	var initial_gold: int = int(round(_get_numeric_value(resource.get("gold", 0), 0.0)))
+	var patch_user: Dictionary = {"gold": initial_gold}
+	var patch: Dictionary = {"user": patch_user}
+	_apply_local_patch(patch)
+	_apply_robot_user_patch(patch_user)
+	_set_auto_gold_override_enabled(true)
+	_send_override_patch(patch)
+	_set_auto_gold_override_enabled(false)
+
+
+## 首次收到 blackboard 时，用其中的血量/子弹/金币值初始化机器人状态。
 func _sync_robot_resources_from_blackboard_once() -> void:
 	if robot_resource_initialized:
 		return
 
-	var user := _get_dict_value(blackboard, "user")
-	if not user.has("health") and not user.has("bullet"):
+	var user: Dictionary = _get_dict_value(blackboard, "user")
+	if not user.has("health") and not user.has("bullet") and not user.has("gold"):
 		return
 
 	if robot.has_method("sync_resources_from_blackboard"):
-		robot.call("sync_resources_from_blackboard", user.get("health", null), user.get("bullet", null))
+		robot.call(
+			"sync_resources_from_blackboard",
+			user.get("health", null),
+			user.get("bullet", null),
+			user.get("gold", null)
+		)
 		robot_resource_initialized = true
 
 
-## 将超控补丁中的血量/子弹值应用到 AI 机器人。
+## 将超控补丁中的血量/子弹/金币值应用到 AI 机器人。
 func _apply_robot_user_patch(user_patch: Dictionary) -> void:
 	if robot.has_method("sync_resources_from_blackboard"):
 		robot.call(
 			"sync_resources_from_blackboard",
 			user_patch.get("health", null),
-			user_patch.get("bullet", null)
+			user_patch.get("bullet", null),
+			user_patch.get("gold", null)
 		)
 	
