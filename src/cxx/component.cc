@@ -7,6 +7,7 @@
 #include "cxx/context.hh"
 #include "cxx/util/navigation/navigation.hh"
 #include "cxx/util/node_mixin.hh"
+
 #include <filesystem>
 
 #include <Eigen/Geometry>
@@ -249,6 +250,13 @@ public:
             });
 
         info("Navigation is initialized");
+    }
+
+    auto before_updating() -> void override {
+        if (auto ok = context.health(); !ok) {
+            fuck("{}", ok.error());
+            throw std::runtime_error{"Context Error"};
+        }
     }
 
     auto update() -> void override {

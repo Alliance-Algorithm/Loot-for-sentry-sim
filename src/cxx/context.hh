@@ -34,6 +34,8 @@ public:
 
     auto init(std::mutex& io_mutex, bool mock = false) -> void;
     auto from(const std::string& raw) noexcept -> std::expected<void, std::string>;
+
+    auto health() const noexcept -> std::expected<void, std::string>;
 };
 
 } // namespace rmcs::navigation::details
