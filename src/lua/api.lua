@@ -58,17 +58,18 @@ function api.restart_navigation(config)
 
 	-- FIXME: 存在调试用的进程(foxglove)，记得去掉
 	local command = [[
-        source %q
+source %q
 
-        screen -S rmcs-navigation -X quit
+screen -S rmcs-navigation -X quit
 
-        screen -dmS rmcs-navigation
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
+screen -dmS rmcs-navigation
+screen -S rmcs-navigation -X screen bash -lc "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
 
-        configs=%q
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml $configs"
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml $configs"
-    ]]
+configs=%q
+screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml $configs"
+sleep 1
+screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml $configs"
+]]
 	local packed_command = string.format(command, filename, configs)
 
 	return util.run(string.format("(%s) >/dev/null 2>&1 &", packed_command))
