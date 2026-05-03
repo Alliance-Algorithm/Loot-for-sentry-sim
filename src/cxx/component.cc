@@ -225,20 +225,53 @@ private:
 
         auto referee = lua_blackboard["referee"].get<sol::table>();
         referee["sync_timestamp"] = read_context(context.sync_timestamp, std::uint64_t{0});
-        referee["robot_id"] =
-            static_cast<int>(read_context(
-                context.robot_id, rmcs_msgs::RobotId{rmcs_msgs::RobotId::UNKNOWN}));
+        const auto robot_id =
+            read_context(context.robot_id, rmcs_msgs::RobotId{rmcs_msgs::RobotId::UNKNOWN});
+        referee["robot_id"] = static_cast<int>(robot_id);
         auto robots_hp = referee["robots_hp"].get<sol::table>();
         const auto hp =
             read_context(context.robots_hp, rmcs_core::referee::status::GameRobotHp{});
-        robots_hp["ally_1"] = hp.ally_1_robot_hp;
-        robots_hp["ally_2"] = hp.ally_2_robot_hp;
-        robots_hp["ally_3"] = hp.ally_3_robot_hp;
-        robots_hp["ally_4"] = hp.ally_4_robot_hp;
-        robots_hp["reserved"] = hp.reserved;
-        robots_hp["ally_7"] = hp.ally_7_robot_hp;
-        robots_hp["outpost"] = hp.ally_outpost_hp;
-        robots_hp["base"] = hp.ally_base_hp;
+        const auto set_ally_hp =
+            [&](std::uint16_t hp1,
+                std::uint16_t hp2,
+                std::uint16_t hp3,
+                std::uint16_t hp4,
+                std::uint16_t hp5,
+                std::uint16_t hp7,
+                std::uint16_t outpost,
+                std::uint16_t base) {
+                robots_hp["ally_1"] = hp1;
+                robots_hp["ally_2"] = hp2;
+                robots_hp["ally_3"] = hp3;
+                robots_hp["ally_4"] = hp4;
+                robots_hp["reserved"] = hp5;
+                robots_hp["ally_7"] = hp7;
+                robots_hp["outpost"] = outpost;
+                robots_hp["base"] = base;
+            };
+        if (robot_id == rmcs_msgs::RobotId::UNKNOWN) {
+            set_ally_hp(0, 0, 0, 0, 0, 0, 0, 0);
+        } else if (robot_id.color() == rmcs_msgs::RobotColor::BLUE) {
+            set_ally_hp(
+                hp.blue_1,
+                hp.blue_2,
+                hp.blue_3,
+                hp.blue_4,
+                hp.blue_5,
+                hp.blue_7,
+                hp.blue_outpost,
+                hp.blue_base);
+        } else {
+            set_ally_hp(
+                hp.red_1,
+                hp.red_2,
+                hp.red_3,
+                hp.red_4,
+                hp.red_5,
+                hp.red_7,
+                hp.red_outpost,
+                hp.red_base);
+        }
         referee["can_confirm_free_revive"] =
             read_context(context.sentry_can_confirm_free_revive, false);
         referee["can_exchange_instant_revive"] =

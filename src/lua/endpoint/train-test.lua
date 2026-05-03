@@ -66,14 +66,14 @@ local function configure_train_rule()
 	rule.bullet_limit = read_option("bullet_limit", rule.bullet_limit)
 	rule.bullet_ready = read_option("bullet_ready", rule.bullet_ready)
 
-	rule.resupply_zone.ours = { x = 13.0, y = 7.1 }
-	rule.road_zone_begin.ours = { x = 16.9, y = 6.3 }
-	rule.road_zone_final.ours = { x = 17.9, y = 4.5 }
-	rule.road_zone_way_point_1 = { x = 14.3, y = 5.9 }
-	rule.road_zone_way_point_2 = { x = 14.3, y = 4.6 }
-	rule.central_highland_middle = { x = 18.4, y = 8.8 }
-	rule.central_highland_near_fluctuant_road.ours = { x = 18.8, y = 6.5 }
-	rule.central_highland_near_doghole.ours = { x = 19.2, y = 10.8 }
+	rule.resupply_zone.ours = { x = -1.2, y = 6.0 }
+	rule.road_zone_begin.ours = { x = 1.5, y = 4.4 }
+	rule.road_zone_final.ours = { x = 6.5, y = 6.5 }
+	rule.road_zone_way_point_1 = { x = 0.5, y = 4.2 }
+	rule.road_zone_way_point_2 = { x = 0.7, y = 6.5 }
+	rule.central_highland_middle = { x = 7.0, y = 0.0 }
+	rule.central_highland_near_fluctuant_road.ours = { x = 8.5, y = 3.0 }
+	rule.central_highland_near_doghole.ours = { x = 8.5, y = -3.0 }
 end
 
 local function reset_job_status()

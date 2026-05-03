@@ -97,6 +97,31 @@ target_link_libraries(
         ${pcl_conversions_LIBRARIES}
 )
 
+add_executable(${PROJECT_NAME}-sim-sidecar src/cxx/sim_sidecar.cc)
+target_compile_features(
+    ${PROJECT_NAME}-sim-sidecar
+    PRIVATE
+        cxx_std_23
+)
+target_compile_definitions(
+    ${PROJECT_NAME}-sim-sidecar
+    PRIVATE
+        RMCS_NAVIGATION_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+)
+target_include_directories(
+    ${PROJECT_NAME}-sim-sidecar
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/
+        ${LUA_INCLUDE_DIR}
+)
+target_link_libraries(
+    ${PROJECT_NAME}-sim-sidecar
+    PRIVATE
+        ${LUA_LIBRARIES}
+        sol2::sol2
+        yaml-cpp::yaml-cpp
+)
+
 find_package(pluginlib REQUIRED)
 pluginlib_export_plugin_description_file(
     rmcs_executor plugins.xml

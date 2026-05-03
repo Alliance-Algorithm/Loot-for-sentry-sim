@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scene/sim_structure_target.gd" id="1_struct"]
+
+[node name="OutpostCube" type="Node3D"]
+script = ExtResource("1_struct")
+structure_kind = "outpost"
+max_health = 1500
+team = "ally"
+cube_size = Vector3(1.5, 1.5, 1.5)
+hitbox_size = Vector3(1.6, 1.6, 1.6)
+display_height = 1.9

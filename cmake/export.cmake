@@ -1,5 +1,5 @@
 install(
-    TARGETS ${PROJECT_NAME}
+    TARGETS ${PROJECT_NAME} ${PROJECT_NAME}-sim-sidecar
     DESTINATION lib/${PROJECT_NAME}/
 )
 install(

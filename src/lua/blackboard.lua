@@ -10,9 +10,9 @@ local function create_default_blackboard()
 	local result = {
 		-- Dynamic Information
 		user = {
-			health = 0,
-			bullet = 0,
-			chassis_power_limit = 0,
+			health = 400,
+			bullet = 100,
+			chassis_power_limit = 100,
 			chassis_power = 0,
 			chassis_buffer_energy = 0,
 			chassis_output_status = false,
@@ -31,8 +31,8 @@ local function create_default_blackboard()
 		game = {
 			stage = "UNKNOWN",
 
-			outpost_health = 0, -- 前哨站血量
-			base_health = 0, -- 基地血量
+			outpost_health = 1500, -- 前哨站血量
+			base_health = 5000, -- 基地血量
 
 			hero_health = 150,
 			infantry_1_health = 150,
