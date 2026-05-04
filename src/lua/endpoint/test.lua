@@ -5,21 +5,11 @@
 local action = require("action")
 local ascii = require("util.ascii_art")
 local clock = require("util.clock")
-local edges = require("util.edge").new()
+local order = require("util.order")
 
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
-
-local restart_navigation = function()
-	action:info("导航即将重启")
-	action:restart_navigation {
-		global_map = "empty",
-		launch_livox = true,
-		launch_odin1 = false,
-		use_sim_time = false,
-	}
-end
 
 ---
 --- Export Context
@@ -35,29 +25,46 @@ on_init = function()
 	clock:reset(blackboard.meta.timestamp)
 	action:switch_topic_forward(true)
 
-	restart_navigation()
-	edges:on(blackboard.getter.rswitch, "UP", restart_navigation)
-
 	scheduler:append_task(function()
 		while true do
 			request:sleep(1)
 			-- action:info("limit: " .. blackboard.user.chassis_power_limit)
 		end
 	end)
+
+	scheduler:append_task(function()
+		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
+		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
+			action:info("导航即将重启")
+			action:restart_navigation {
+				global_map = "empty",
+				launch_livox = true,
+				launch_odin1 = false,
+				use_sim_time = false,
+			}
+		end)
+
+		while true do
+			switch_order:spin()
+			request:yield()
+		end
+	end)
 end
 
 on_tick = function()
 	clock:update(blackboard.meta.timestamp)
-
-	edges:spin()
 	scheduler:spin_once()
 end
 
 on_exit = function()
-	action:stop_navigation()
+	-- action:stop_navigation()
 end
 
 --- 由 NAV2 发布的目标速度值，在此处理回调
 on_control = function(x, y, _)
-	action:update_chassis_vel(x, y)
+	if blackboard.play.rswitch == "UP" then
+		action:update_chassis_vel(x, y)
+	else
+		action:update_chassis_vel(0, 0)
+	end
 end
