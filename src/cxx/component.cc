@@ -45,19 +45,23 @@ private:
     details::Navigation navigation;
 
     struct Command {
-        OutputInterface<Eigen::Vector2d> chassis_speed;
-        OutputInterface<std::size_t> nod_count;
-        OutputInterface<bool> rotate_chassis;
-        OutputInterface<bool> detect_targets;
+        using ChassisMode = rmcs_msgs::ChassisMode;
+
+        OutputInterface<bool> enable_control;
         OutputInterface<bool> enable_autoaim;
+        OutputInterface<ChassisMode> chassis_behavior;
+        OutputInterface<Eigen::Vector2d> chassis_speed;
+        OutputInterface<Eigen::Vector2d> gimbal_speed;
 
         auto init(Navigation& component) -> void {
+            component.register_output("/rmcs_navigation/enable_control", enable_control, false);
+            component.register_output("/rmcs_navigation/enable_autoaim", enable_autoaim, false);
+            component.register_output(
+                "/rmcs_navigation/chassis_behavior", chassis_behavior, ChassisMode::AUTO);
             component.register_output(
                 "/rmcs_navigation/chassis_velocity", chassis_speed, Eigen::Vector2d::Zero());
-            component.register_output("/rmcs_navigation/nod_count", nod_count, 0);
-            component.register_output("/rmcs_navigation/rotate_chassis", rotate_chassis, false);
-            component.register_output("/rmcs_navigation/detect_targets", detect_targets, false);
-            component.register_output("/rmcs_navigation/start_autoaim", enable_autoaim, false);
+            component.register_output(
+                "/rmcs_navigation/gimbal_velocity", gimbal_speed, Eigen::Vector2d::Zero());
         }
     } command;
 
@@ -88,6 +92,8 @@ private:
 
         // @TODO:
         //  补全这些实现
+        api.set_function(
+            "update_enable_control", [this](bool enable) { *command.enable_control = enable; });
         api.set_function(
             "send_target", [this](double x, double y) { navigation.send_target(x, y); });
         api.set_function("switch_topic_forward", [this](bool enable) {
