@@ -7,7 +7,7 @@ extends Node3D
 @export var team := "ally"
 @export var cube_size := Vector3(1.4, 1.4, 1.4)
 @export var hitbox_size := Vector3(1.5, 1.5, 1.5)
-@export var display_height := 1.8
+@export var display_height := 0.5
 
 const ARMOR_LAYER := 1 << 5
 const HEALTH_BAR_BACK_SIZE := Vector2(1.5, 0.16)
@@ -15,6 +15,7 @@ const HEALTH_BAR_FILL_SIZE := Vector2(1.4, 0.12)
 const HEALTH_BAR_BACK_PRIORITY := 10
 const HEALTH_BAR_FILL_PRIORITY := 11
 const HEALTH_BAR_FILL_Z_OFFSET := -0.02
+const HITBOX_SCRIPT := preload("res://scene/sim_structure_hitbox.gd")
 
 var body_mesh: MeshInstance3D = null
 var hitbox_area: Area3D = null
@@ -36,10 +37,7 @@ func _process(_delta: float) -> void:
 	_refresh_health_display()
 
 
-func on_bullet_hit(damage: int, from_team: String) -> bool:
-	if from_team == team:
-		return false
-
+func apply_structure_damage(damage: int) -> bool:
 	var client := _get_sim_sidecar_client()
 	if client == null:
 		return false
@@ -99,19 +97,12 @@ func _body_color() -> Color:
 
 
 func _setup_hitbox() -> void:
-	hitbox_area = Area3D.new()
+	hitbox_area = HITBOX_SCRIPT.new()
 	hitbox_area.name = "Hitbox"
-	hitbox_area.monitoring = true
-	hitbox_area.monitorable = true
-	hitbox_area.collision_layer = ARMOR_LAYER
-	hitbox_area.collision_mask = 0
 	add_child(hitbox_area)
-
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = hitbox_size
-	shape.shape = box
-	hitbox_area.add_child(shape)
+	hitbox_area.set("team", team)
+	hitbox_area.set("hitbox_size", hitbox_size)
+	hitbox_area.set("owner_target_path", hitbox_area.get_path_to(self))
 
 
 func _setup_health_display() -> void:

@@ -439,8 +439,11 @@ struct SimState {
      * 用于驱动比赛策略中的守家和前哨站相关判断。
      */
     struct Game {
-        std::optional<double> base_health;    ///< 基地血量(可选)
-        std::optional<double> outpost_health; ///< 前哨站血量(可选)
+        std::optional<double> base_health;                    ///< 基地血量(可选)
+        std::optional<double> outpost_health;                 ///< 前哨站血量(可选)
+        std::optional<double> gold_coin;                      ///< 队伍金币(可选)
+        std::optional<double> remaining_time;                 ///< 比赛剩余时间(可选)
+        std::optional<double> exchangeable_ammunition_quantity; ///< 可兑换弹药量(可选)
     };
 
     User user; ///< 用户控制状态
@@ -895,6 +898,15 @@ public:
         if (state.game.outpost_health) {
             game["outpost_health"] = *state.game.outpost_health;
         }
+        if (state.game.gold_coin) {
+            game["gold_coin"] = *state.game.gold_coin;
+        }
+        if (state.game.remaining_time) {
+            game["remaining_time"] = *state.game.remaining_time;
+        }
+        if (state.game.exchangeable_ammunition_quantity) {
+            game["exchangeable_ammunition_quantity"] = *state.game.exchangeable_ammunition_quantity;
+        }
 
         auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = state.meta.timestamp;
@@ -1143,6 +1155,17 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
         if (game["outpost_health"] && !game["outpost_health"].IsNull()) {
             state.game.outpost_health = parse_double(game["outpost_health"]);
         }
+        if (game["gold_coin"] && !game["gold_coin"].IsNull()) {
+            state.game.gold_coin = parse_double(game["gold_coin"]);
+        }
+        if (game["remaining_time"] && !game["remaining_time"].IsNull()) {
+            state.game.remaining_time = parse_double(game["remaining_time"]);
+        }
+        if (game["exchangeable_ammunition_quantity"]
+            && !game["exchangeable_ammunition_quantity"].IsNull()) {
+            state.game.exchangeable_ammunition_quantity =
+                parse_double(game["exchangeable_ammunition_quantity"]);
+        }
     }
 
     auto meta = root["meta"];
@@ -1197,11 +1220,15 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
     }
 
     auto game = patch["game"];
-    if (game && game.IsMap() && game["stage"]) {
-        auto filtered_game = YAML::Node{YAML::NodeType::Map};
+    if (game && game.IsMap()) {
+    auto filtered_game = YAML::Node{YAML::NodeType::Map};
+    if (game["stage"])
         filtered_game["stage"] = game["stage"];
+    if (game["remaining_time"])
+        filtered_game["remaining_time"] = game["remaining_time"];
+    if (has_entries(filtered_game))
         result["game"] = filtered_game;
-    }
+}
 
     auto play = patch["play"];
     if (play && play.IsMap()) {
@@ -1281,6 +1308,8 @@ struct ClientRuntime {
     SimState state;
     OverrideState override_state;
     bool has_input = false;
+    bool has_initial_remaining_time = false;
+    bool waiting_for_initial_remaining_time_logged = false;
     std::chrono::steady_clock::time_point last_input_time = std::chrono::steady_clock::now();
 };
 
@@ -1321,6 +1350,10 @@ auto process_message(
         }
 
         update_state_from_payload(payload, context.state);
+        if (context.state.game.remaining_time.has_value()) {
+            context.has_initial_remaining_time = true;
+            context.waiting_for_initial_remaining_time_logged = false;
+        }
 
         auto control = payload["control"];
         if (control && control.IsMap()) {
@@ -1552,6 +1585,20 @@ auto handle_client(const Args& args, int client_fd) -> void {
         runtime.apply_state(context.state);
         if (context.override_state.enabled && context.override_state.patch && context.override_state.patch->IsMap()) {
             runtime.apply_override_patch(*context.override_state.patch);
+        }
+
+        auto blackboard_snapshot = runtime.snapshot_blackboard();
+        auto game = blackboard_snapshot["game"];
+        auto stage = parse_string(game["stage"], "UNKNOWN");
+        if (stage == "STARTED" && !context.has_initial_remaining_time) {
+            if (!context.waiting_for_initial_remaining_time_logged) {
+                context.waiting_for_initial_remaining_time_logged = true;
+                logger(
+                    LogLevel::Info,
+                    "waiting for initial game.remaining_time before STARTED tick");
+            }
+            emit_runtime_state();
+            continue;
         }
 
         runtime.tick();

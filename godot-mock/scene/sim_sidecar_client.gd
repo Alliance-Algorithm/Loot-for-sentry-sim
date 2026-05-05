@@ -27,6 +27,8 @@ extends Node
 @export var initial_base_health := 5000
 ## 前哨站初始血量。
 @export var initial_outpost_health := 1500
+## 比赛初始倒计时（秒，7分钟）。
+@export var initial_remaining_time := 420.0
 ## AI 机器人节点路径。
 @export var robot_path: NodePath
 ## 导航目标点节点路径。
@@ -98,6 +100,12 @@ var robot_resource_initialized := false
 var sim_base_health := initial_base_health
 ## 本地维护的前哨站血量（通过 sim.input 同步到 Lua）。
 var sim_outpost_health := initial_outpost_health
+## 本地维护的比赛剩余时间（秒）。
+var sim_remaining_time := initial_remaining_time
+## 本地维护的可兑换弹药量。
+var sim_exchangeable_ammunition_quantity := 0
+## 比赛是否已进入 STARTED，用于驱动倒计时。
+var competition_started := false
 
 ## 调试 UI 控件引用。
 var decision_label: RichTextLabel
@@ -109,6 +117,8 @@ var bullet_spin: SpinBox
 var gold_spin: SpinBox
 var base_hp_spin: SpinBox
 var outpost_hp_spin: SpinBox
+var remaining_time_spin: SpinBox
+var exchangeable_ammo_spin: SpinBox
 var stage_select: OptionButton
 var rswitch_select: OptionButton
 var lswitch_select: OptionButton
@@ -159,6 +169,9 @@ func _process(_delta: float) -> void:
 		robot_resource_initialized = false
 		sim_base_health = initial_base_health
 		sim_outpost_health = initial_outpost_health
+		sim_remaining_time = initial_remaining_time
+		sim_exchangeable_ammunition_quantity = 0
+		competition_started = false
 		if override_toggle != null:
 			override_toggle.set_pressed_no_signal(false)
 		if edit_box != null:
@@ -194,6 +207,9 @@ func _process(_delta: float) -> void:
 			robot_resource_initialized = false
 			sim_base_health = initial_base_health
 			sim_outpost_health = initial_outpost_health
+			sim_remaining_time = initial_remaining_time
+			sim_exchangeable_ammunition_quantity = 0
+			competition_started = false
 			if override_toggle != null:
 				override_toggle.set_pressed_no_signal(false)
 			if edit_box != null:
@@ -234,6 +250,7 @@ func _physics_process(delta: float) -> void:
 
 	sim_time += delta
 	send_accum += delta
+	_tick_competition_clock(delta)
 	_tick_passive_gold(delta)
 	_update_auto_resupply(delta)
 
@@ -259,8 +276,16 @@ func _tick_passive_gold(delta: float) -> void:
 	var patch_user: Dictionary = {"gold": next_gold}
 	var patch: Dictionary = {"user": patch_user}
 	_apply_local_patch(patch)
+	_apply_local_patch({"game": {"gold_coin": next_gold}})
 	_apply_robot_user_patch(patch_user)
 	_refresh_display()
+
+
+func _tick_competition_clock(delta: float) -> void:
+	if not competition_started:
+		return
+	sim_remaining_time = max(sim_remaining_time - delta, 0.0)
+	_apply_local_patch({"game": {"remaining_time": sim_remaining_time}})
 
 
 ## 输入处理：检测"开始决策"动作 (sim_start_decision) 或回车键。
@@ -313,11 +338,11 @@ func _handle_message(msg: Dictionary) -> void:
 
 	# 导航目标点更新（Lua 下发）。
 	if t == "sim.nav_target":
-		var x := float(msg.get("x", target_point.global_position.x))
-		var y := float(msg.get("y", target_point.global_position.z))
+		var x := float(msg.get("x", target_point.global_position.z))
+		var y := float(msg.get("y", target_point.global_position.x))
 		var p := target_point.global_position
-		p.x = x
-		p.z = y
+		p.x = y
+		p.z = x
 		target_point.global_position = p
 		_refresh_display()
 		return
@@ -355,8 +380,8 @@ func _send_input() -> void:
 	var resource := _get_robot_resource_state()
 	var input_payload := {
 		"user": {
-			"x": robot.global_position.x,
-			"y": robot.global_position.z,
+			"x": robot.global_position.z,
+			"y": robot.global_position.x,
 			"yaw": robot.global_rotation.y,
 			"health": int(resource.get("health", 0)),
 			"bullet": int(resource.get("bullet", 0)),
@@ -365,6 +390,9 @@ func _send_input() -> void:
 		"game": {
 			"base_health": sim_base_health,
 			"outpost_health": sim_outpost_health,
+			"gold_coin": _get_current_gold_value(),
+			"remaining_time": sim_remaining_time,
+			"exchangeable_ammunition_quantity": sim_exchangeable_ammunition_quantity,
 		},
 		"meta": {
 			"timestamp": sim_time,
@@ -381,6 +409,8 @@ func _send_input() -> void:
 func _send_start_decision() -> void:
 	if not connected:
 		return
+
+	_begin_competition_session()
 
 	_send_json({
 		"type": "sim.command",
@@ -915,6 +945,12 @@ func _build_debug_ui() -> void:
 	outpost_hp_spin = _add_spin_row(edit_box, "Outpost HP", 0.0, 99999.0, 1.0)
 	outpost_hp_spin.value_changed.connect(_on_outpost_hp_changed)
 
+	remaining_time_spin = _add_spin_row(edit_box, "Remain Time", 0.0, 420.0, 1.0)
+	remaining_time_spin.value_changed.connect(_on_remaining_time_changed)
+
+	exchangeable_ammo_spin = _add_spin_row(edit_box, "Ammo Bank", 0.0, 99999.0, 1.0)
+	exchangeable_ammo_spin.value_changed.connect(_on_exchangeable_ammo_changed)
+
 	stage_select = _add_option_row(edit_box, "Stage", STAGE_VALUES)
 	stage_select.item_selected.connect(_on_stage_selected)
 
@@ -1030,6 +1066,7 @@ func _on_gold_changed(value: float) -> void:
 
 	var patch: Dictionary = {"user": {"gold": int(round(value))}}
 	_apply_local_patch(patch)
+	_apply_local_patch({"game": {"gold_coin": int(round(value))}})
 	var user_patch: Dictionary = patch["user"]
 	_apply_robot_user_patch(user_patch)
 	_refresh_display()
@@ -1055,13 +1092,41 @@ func _on_outpost_hp_changed(value: float) -> void:
 	_refresh_display()
 
 
+## UI 回调：比赛剩余时间改变 → 更新本地比赛状态，后续通过 sim.input 同步。
+func _on_remaining_time_changed(value: float) -> void:
+	if ui_updating:
+		return
+
+	sim_remaining_time = clampf(value, 0.0, initial_remaining_time)
+	_apply_local_patch({"game": {"remaining_time": sim_remaining_time}})
+	_refresh_display()
+
+
+## UI 回调：可兑换弹药量改变 → 更新本地比赛状态，后续通过 sim.input 同步。
+func _on_exchangeable_ammo_changed(value: float) -> void:
+	if ui_updating:
+		return
+
+	sim_exchangeable_ammunition_quantity = maxi(0, int(round(value)))
+	_apply_local_patch({
+		"game": {
+			"exchangeable_ammunition_quantity": sim_exchangeable_ammunition_quantity
+		}
+	})
+	_refresh_display()
+
+
 ## UI 回调：Stage 选择改变 → 推送 game.stage。
 func _on_stage_selected(index: int) -> void:
 	if ui_updating:
 		return
 
 	var stage : String = STAGE_VALUES[clamp(index, 0, STAGE_VALUES.size() - 1)]
-	var patch := {"game": {"stage": stage}}
+	if stage == "STARTED":
+		_begin_competition_session()
+	else:
+		competition_started = false
+	var patch := {"game": {"stage": stage, "remaining_time": sim_remaining_time}}
 	_apply_local_patch(patch)
 	_send_override_patch(patch)
 	_refresh_display()
@@ -1106,15 +1171,38 @@ func _sync_controls_from_blackboard() -> void:
 	gold_spin.value = float(user.get("gold", gold_spin.value))
 	sim_base_health = int(round(_get_numeric_value(game.get("base_health", sim_base_health), 0.0)))
 	sim_outpost_health = int(round(_get_numeric_value(game.get("outpost_health", sim_outpost_health), 0.0)))
+	sim_remaining_time = _get_numeric_value(game.get("remaining_time", sim_remaining_time), 0.0)
+	sim_exchangeable_ammunition_quantity = int(round(
+		_get_numeric_value(
+			game.get("exchangeable_ammunition_quantity", sim_exchangeable_ammunition_quantity),
+			0.0
+		)
+	))
 	if base_hp_spin != null:
 		base_hp_spin.value = float(sim_base_health)
 	if outpost_hp_spin != null:
 		outpost_hp_spin.value = float(sim_outpost_health)
+	if remaining_time_spin != null:
+		remaining_time_spin.value = sim_remaining_time
+	if exchangeable_ammo_spin != null:
+		exchangeable_ammo_spin.value = float(sim_exchangeable_ammunition_quantity)
 
 	_select_option_value(stage_select, STAGE_VALUES, str(game.get("stage", "UNKNOWN")))
 	_select_option_value(rswitch_select, SWITCH_VALUES, str(play.get("rswitch", "UNKNOWN")))
 	_select_option_value(lswitch_select, SWITCH_VALUES, str(play.get("lswitch", "UNKNOWN")))
+	competition_started = str(game.get("stage", "UNKNOWN")) == "STARTED"
 	ui_updating = false
+
+
+func _begin_competition_session() -> void:
+	sim_remaining_time = initial_remaining_time
+	competition_started = true
+	_apply_local_patch({
+		"game": {
+			"stage": "STARTED",
+			"remaining_time": sim_remaining_time,
+		}
+	})
 
 
 ## 在 OptionButton 中选中匹配的枚举值。

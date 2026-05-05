@@ -85,24 +85,23 @@ local function configure_test_rule()
 	rule.engineer_health_ready_red_line =
 		read_option("engineer_health_ready_red_line", 50)
 
-	rule.resupply_zone.ours = { x = 0.0, y = 0.0 }
-	rule.road_zone_begin.ours = { x = 0.0, y = 0.0 }
-	rule.road_zone_way_point_1.ours = { x = 0.0, y = 0.0 }
-	rule.fluctuant_road_begin.ours = { x = 0.0, y = 0.0 }
-	rule.fluctuant_road_final.ours = { x = 0.0, y = 0.0 }
-	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
-	rule.one_step_final.ours = { x = 0.0, y = 0.0 }
-	rule.central_highland_near_fluctuant_road.ours = { x = 0.0, y = 0.0 }
-	rule.central_highland_middle = { x = 0.0, y = 0.0 }
-	rule.central_highland_near_doghole.ours = { x = 0.0, y = 0.0 }
-	rule.base_left_gain_point.ours = { x = 0.0, y = 0.0 }
-	rule.base_right_gain_point.ours = { x = 0.0, y = 0.0 }
-	rule.one_step_begin.ours = { x = 0.0, y = 0.0 }
-	rule.attack_outpost_point.ours = { x = 0.0, y = 0.0 }
-
-	rule.central_highland_near_fluctuant_road.them = { x = 0.0, y = 0.0 }
-	rule.central_highland_near_doghole.them = { x = 0.0, y = 0.0 }
-	rule.fluctuant_road_final.them = { x = 0.0, y = 0.0 }
+	rule.resupply_zone.ours = { x = 3.0, y = 2.0 }
+	rule.road_zone_begin.ours = { x = 8.2, y = 3.7 }
+	rule.road_zone_way_point_1.ours = { x = 5.3, y = 3.4 }
+	rule.fluctuant_road_begin.ours = { x = 5.6, y = 1.2 }
+	rule.fluctuant_road_final.ours = { x = 8.5, y = 1.0 }
+	rule.one_step_begin.ours = { x = 8.7, y = 3.1 }
+	rule.one_step_final.ours = { x = 8.7, y = 2.1 }
+	rule.central_highland_near_fluctuant_road.ours = { x = 12.8, y = 3.0 }
+	rule.central_highland_middle = { x = 12.0, y = 8.0 }
+	rule.central_highland_near_doghole.ours = { x = 15.0, y = 12.5 }
+	rule.base_left_gain_point.ours = { x = 4.5, y = 8.7 }
+	rule.base_right_gain_point.ours = { x = 4.5, y = 7.3 }
+	rule.attack_outpost_point.ours = { x = 11.5, y = 4.1 }
+	rule.fortress.ours = { x = 7.2 , y = 8.0}
+	rule.central_highland_near_fluctuant_road.them = { x = 16.5, y = 12.8 }
+	rule.central_highland_near_doghole.them = { x = 15.0, y = 3.5 }
+	rule.fluctuant_road_final.them = { x = 20.0, y = 14.2 }
 end
 
 local function reset_job_status()
