@@ -12,7 +12,7 @@ return function()
 
 	action:update_chassis_mode("SPIN")
 	local ok = navigate_to_point(enemy_fluctuant_road_final, {
-		tolerance = 0.1,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not ok then

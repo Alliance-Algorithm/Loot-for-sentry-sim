@@ -102,6 +102,11 @@ local function configure_test_rule()
 	rule.central_highland_near_fluctuant_road.them = { x = 16.5, y = 12.8 }
 	rule.central_highland_near_doghole.them = { x = 15.0, y = 3.5 }
 	rule.fluctuant_road_final.them = { x = 20.0, y = 14.2 }
+	--这是什么
+	rule.central_highland_gain_point.ours={x = 12.0 , y = 10.8 }
+	rule.central_highland_gain_point.them={x = 17.2 , y = 8.0 }
+	rule.central_highland_near_two_steps_and_outpost.ours ={x = 11.5 , y = 5.5 }
+	rule.central_highland_near_two_steps_and_outpost.them ={x = 18.0 , y = 10.0 }
 end
 
 local function reset_job_status()
@@ -235,21 +240,21 @@ local last_big_energy_mechanism_activated = false
 local last_small_energy_mechanism_activated = false
 
 local function select_forward_press_mode()
-	local condition = blackboard.condition
-	local dart_hit_first_time = condition.dart_hit_first_time()
-	local double_damage_activated = condition.double_damage_activated()
-	local big_energy_mechanism_activated = condition.big_energy_mechanism_activated()
-	local small_energy_mechanism_activated = condition.small_energy_mechanism_activated()
-	local double_damage_rising = double_damage_activated and not last_double_damage_activated
-	local big_energy_rising = big_energy_mechanism_activated and not last_big_energy_mechanism_activated
-	local small_energy_rising =
-		small_energy_mechanism_activated and not last_small_energy_mechanism_activated
+	-- local condition = blackboard.condition
+	-- local dart_hit_first_time = condition.dart_hit_first_time()
+	-- local double_damage_activated = condition.double_damage_activated()
+	-- local big_energy_mechanism_activated = condition.big_energy_mechanism_activated()
+	-- local small_energy_mechanism_activated = condition.small_energy_mechanism_activated()
+	-- local double_damage_rising = double_damage_activated and not last_double_damage_activated
+	-- local big_energy_rising = big_energy_mechanism_activated and not last_big_energy_mechanism_activated
+	-- local small_energy_rising =
+	-- 	small_energy_mechanism_activated and not last_small_energy_mechanism_activated
 
-	last_double_damage_activated = double_damage_activated
-	last_big_energy_mechanism_activated = big_energy_mechanism_activated
-	last_small_energy_mechanism_activated = small_energy_mechanism_activated
+	-- last_double_damage_activated = double_damage_activated
+	-- last_big_energy_mechanism_activated = big_energy_mechanism_activated
+	-- last_small_energy_mechanism_activated = small_energy_mechanism_activated
 
-	if small_energy_rising then
+	if true then
 		return "two_step"
 	end
 

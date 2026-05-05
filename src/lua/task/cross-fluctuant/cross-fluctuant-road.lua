@@ -36,7 +36,7 @@ return function(ours_zone, forward_center)
 	))
 	action:update_gimbal_direction(gimbal_yaw)
 	local ok = navigate_to_point(to, {
-		tolerance = 0.1,
+		tolerance = 0.4,
 		timeout = 10,
 	})
 	if not ok then

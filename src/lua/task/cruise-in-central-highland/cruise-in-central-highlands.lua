@@ -53,7 +53,7 @@ return function(ours_zone, switch_interval)
 		local phase_start = clock:now()
 		action:update_chassis_mode("SPIN")
 		local ok = navigate_to_point(target.point, {
-			tolerance = 0.1,
+			tolerance = 0.4,
 			timeout = navigation_timeout,
 		})
 		if not ok then

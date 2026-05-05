@@ -13,7 +13,13 @@ extends Node
 @export var port := 34567
 ## 上行状态推送频率 (Hz)。
 @export var send_hz := 60.0
-## 补给区触发半径。
+## 是否优先使用矩形补给区判定。
+@export var use_resupply_rect := true
+## 矩形补给区左下角坐标。
+@export var resupply_rect_min := Vector2(0.0, 0.0)
+## 矩形补给区右上角坐标。
+@export var resupply_rect_max := Vector2(4.0, 4.0)
+## 旧补给点回退半径。
 @export var resupply_radius := 0.8
 ## 每秒回复血量。
 @export var resupply_health_rate := 100.0
@@ -538,6 +544,40 @@ func _get_resupply_point() -> Variant:
 	return Vector2(x, y)
 
 
+## 返回当前启用的矩形补给区；无效时返回 null。
+func _get_resupply_rect() -> Variant:
+	if not use_resupply_rect:
+		return null
+
+	var min_x := minf(resupply_rect_min.x, resupply_rect_max.x)
+	var min_y := minf(resupply_rect_min.y, resupply_rect_max.y)
+	var max_x := maxf(resupply_rect_min.x, resupply_rect_max.x)
+	var max_y := maxf(resupply_rect_min.y, resupply_rect_max.y)
+	if max_x <= min_x or max_y <= min_y:
+		return null
+
+	return {
+		"min": Vector2(min_x, min_y),
+		"max": Vector2(max_x, max_y),
+	}
+
+
+## 检查点是否落在矩形补给区内，边界视为在区内。
+func _is_point_in_resupply_rect(point: Vector2, rect: Dictionary) -> bool:
+	var rect_min: Vector2 = rect["min"]
+	var rect_max: Vector2 = rect["max"]
+	return point.x >= rect_min.x and point.x <= rect_max.x and point.y >= rect_min.y and point.y <= rect_max.y
+
+
+## 计算点到矩形补给区的最短距离；区内返回 0。
+func _distance_to_resupply_rect(point: Vector2, rect: Dictionary) -> float:
+	var rect_min: Vector2 = rect["min"]
+	var rect_max: Vector2 = rect["max"]
+	var clamped_x := clampf(point.x, rect_min.x, rect_max.x)
+	var clamped_y := clampf(point.y, rect_min.y, rect_max.y)
+	return point.distance_to(Vector2(clamped_x, clamped_y))
+
+
 ## 按速率线性推进资源值（血量或子弹），通过 buffer 累积分整数值变化。
 ## @param current: 当前资源值。
 ## @param target: 目标值。
@@ -598,20 +638,25 @@ func _update_auto_resupply(delta: float) -> void:
 			_refresh_display()
 		return
 
-	# 解析补给点坐标。
-	var resupply_point_value: Variant = _get_resupply_point()
-	if resupply_point_value == null:
-		_set_auto_resupply_override_enabled(false)
-		if previous_in_zone or previous_active:
-			_refresh_display()
-		return
-
-	var resupply_point: Vector2 = resupply_point_value
 	var robot_position := Vector2(robot.global_position.x, robot.global_position.z)
-	var distance := robot_position.distance_to(resupply_point)
-	resupply_distance = distance
-	# 检测是否在补给半径内。
-	in_resupply_zone = distance <= resupply_radius
+	var resupply_rect_value: Variant = _get_resupply_rect()
+	if resupply_rect_value != null:
+		var resupply_rect: Dictionary = resupply_rect_value
+		resupply_distance = _distance_to_resupply_rect(robot_position, resupply_rect)
+		in_resupply_zone = _is_point_in_resupply_rect(robot_position, resupply_rect)
+	else:
+		# 矩形补给区关闭或无效时，回退到旧补给点半径判定。
+		var resupply_point_value: Variant = _get_resupply_point()
+		if resupply_point_value == null:
+			_set_auto_resupply_override_enabled(false)
+			if previous_in_zone or previous_active:
+				_refresh_display()
+			return
+
+		var resupply_point: Vector2 = resupply_point_value
+		var distance := robot_position.distance_to(resupply_point)
+		resupply_distance = distance
+		in_resupply_zone = distance <= resupply_radius
 
 	# 读取期望回复的目标值。
 	var target_health := _get_positive_target_value("rule", "health_ready")

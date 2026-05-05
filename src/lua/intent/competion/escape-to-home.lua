@@ -116,7 +116,7 @@ function EscapeToHomeIntent:create_machine(ctx)
 			action:update_chassis_mode("SPIN")
 			ctx.run_job("escape_to_resupply", function()
 				return navigate_to_point(resupply_zone, {
-					tolerance = 0.15,
+					tolerance = 0.4,
 					timeout = 10,
 				})
 			end)

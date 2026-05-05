@@ -53,7 +53,7 @@ return function(ours_zone, forward_center)
 
 	for _, target in ipairs(targets) do
 		local ok = navigate_to_point(target.point, {
-			tolerance = 0.1,
+			tolerance = 0.4,
 			timeout = 10,
 		})
 		if not ok then
