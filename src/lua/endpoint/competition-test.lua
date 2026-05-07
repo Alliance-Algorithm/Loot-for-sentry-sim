@@ -401,7 +401,8 @@ local function create_endpoint_fsm()
 				runtime.navigation_ready = ok
 			end
 
-			if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
+			-- if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
+			if blackboard.game.stage == "STARTED" then
 				handle:set_next(State.active)
 			end
 		end,

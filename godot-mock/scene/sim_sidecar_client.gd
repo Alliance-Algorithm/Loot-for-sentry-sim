@@ -110,6 +110,14 @@ var sim_outpost_health := initial_outpost_health
 var sim_remaining_time := initial_remaining_time
 ## 本地维护的可兑换弹药量。
 var sim_exchangeable_ammunition_quantity := 0
+## 本地维护的己方飞镖命中次数。
+var sim_our_dart_nmber_of_hits := 0
+## 本地维护的堡垒占领状态。
+var sim_fortress_occupied := false
+## 本地维护的大能量机关激活状态。
+var sim_big_energy_mechanism_activated := false
+## 本地维护的小能量机关激活状态。
+var sim_small_energy_mechanism_activated := false
 ## 比赛是否已进入 STARTED，用于驱动倒计时。
 var competition_started := false
 
@@ -125,6 +133,10 @@ var base_hp_spin: SpinBox
 var outpost_hp_spin: SpinBox
 var remaining_time_spin: SpinBox
 var exchangeable_ammo_spin: SpinBox
+var dart_hits_spin: SpinBox
+var fortress_occupied_toggle: CheckButton
+var big_energy_mechanism_toggle: CheckButton
+var small_energy_mechanism_toggle: CheckButton
 var stage_select: OptionButton
 var rswitch_select: OptionButton
 var lswitch_select: OptionButton
@@ -177,6 +189,10 @@ func _process(_delta: float) -> void:
 		sim_outpost_health = initial_outpost_health
 		sim_remaining_time = initial_remaining_time
 		sim_exchangeable_ammunition_quantity = 0
+		sim_our_dart_nmber_of_hits = 0
+		sim_fortress_occupied = false
+		sim_big_energy_mechanism_activated = false
+		sim_small_energy_mechanism_activated = false
 		competition_started = false
 		if override_toggle != null:
 			override_toggle.set_pressed_no_signal(false)
@@ -215,6 +231,10 @@ func _process(_delta: float) -> void:
 			sim_outpost_health = initial_outpost_health
 			sim_remaining_time = initial_remaining_time
 			sim_exchangeable_ammunition_quantity = 0
+			sim_our_dart_nmber_of_hits = 0
+			sim_fortress_occupied = false
+			sim_big_energy_mechanism_activated = false
+			sim_small_energy_mechanism_activated = false
 			competition_started = false
 			if override_toggle != null:
 				override_toggle.set_pressed_no_signal(false)
@@ -399,6 +419,10 @@ func _send_input() -> void:
 			"gold_coin": _get_current_gold_value(),
 			"remaining_time": sim_remaining_time,
 			"exchangeable_ammunition_quantity": sim_exchangeable_ammunition_quantity,
+			"our_dart_nmber_of_hits": sim_our_dart_nmber_of_hits,
+			"fortress_occupied": sim_fortress_occupied,
+			"big_energy_mechanism_activated": sim_big_energy_mechanism_activated,
+			"small_energy_mechanism_activated": sim_small_energy_mechanism_activated,
 		},
 		"meta": {
 			"timestamp": sim_time,
@@ -515,6 +539,15 @@ func _get_dict_value(source: Dictionary, key: String) -> Dictionary:
 func _get_numeric_value(value: Variant, fallback: float = 0.0) -> float:
 	if typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT:
 		return float(value)
+	return fallback
+
+
+## 安全将 Variant 转换为布尔值。
+func _get_boolean_value(value: Variant, fallback: bool = false) -> bool:
+	if typeof(value) == TYPE_BOOL:
+		return bool(value)
+	if typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT:
+		return float(value) != 0.0
 	return fallback
 
 
@@ -996,6 +1029,18 @@ func _build_debug_ui() -> void:
 	exchangeable_ammo_spin = _add_spin_row(edit_box, "Ammo Bank", 0.0, 99999.0, 1.0)
 	exchangeable_ammo_spin.value_changed.connect(_on_exchangeable_ammo_changed)
 
+	dart_hits_spin = _add_spin_row(edit_box, "Dart Hits", 0.0, 999.0, 1.0)
+	dart_hits_spin.value_changed.connect(_on_dart_hits_changed)
+
+	fortress_occupied_toggle = _add_check_row(edit_box, "Fortress")
+	fortress_occupied_toggle.toggled.connect(_on_fortress_occupied_toggled)
+
+	big_energy_mechanism_toggle = _add_check_row(edit_box, "Big Energy")
+	big_energy_mechanism_toggle.toggled.connect(_on_big_energy_mechanism_toggled)
+
+	small_energy_mechanism_toggle = _add_check_row(edit_box, "Small Energy")
+	small_energy_mechanism_toggle.toggled.connect(_on_small_energy_mechanism_toggled)
+
 	stage_select = _add_option_row(edit_box, "Stage", STAGE_VALUES)
 	stage_select.item_selected.connect(_on_stage_selected)
 
@@ -1063,6 +1108,22 @@ func _add_option_row(parent: VBoxContainer, label_text: String, values: Array) -
 		option.add_item(str(entry))
 	row.add_child(option)
 	return option
+
+
+## 创建一行布尔开关控件（标签 + 勾选框），返回 CheckButton 引用。
+func _add_check_row(parent: VBoxContainer, label_text: String) -> CheckButton:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(90, 0)
+	row.add_child(label)
+
+	var toggle := CheckButton.new()
+	toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(toggle)
+	return toggle
 
 
 ## UI 回调：开始决策按钮。
@@ -1161,6 +1222,70 @@ func _on_exchangeable_ammo_changed(value: float) -> void:
 	_refresh_display()
 
 
+## UI 回调：己方飞镖命中次数改变。
+func _on_dart_hits_changed(value: float) -> void:
+	if ui_updating:
+		return
+
+	sim_our_dart_nmber_of_hits = maxi(0, int(round(value)))
+	var patch := {
+		"game": {
+			"our_dart_nmber_of_hits": sim_our_dart_nmber_of_hits,
+		}
+	}
+	_apply_local_patch(patch)
+	_send_override_patch(patch)
+	_refresh_display()
+
+
+## UI 回调：堡垒占领状态改变。
+func _on_fortress_occupied_toggled(enabled: bool) -> void:
+	if ui_updating:
+		return
+
+	sim_fortress_occupied = enabled
+	var patch := {
+		"game": {
+			"fortress_occupied": sim_fortress_occupied,
+		}
+	}
+	_apply_local_patch(patch)
+	_send_override_patch(patch)
+	_refresh_display()
+
+
+## UI 回调：大能量机关激活状态改变。
+func _on_big_energy_mechanism_toggled(enabled: bool) -> void:
+	if ui_updating:
+		return
+
+	sim_big_energy_mechanism_activated = enabled
+	var patch := {
+		"game": {
+			"big_energy_mechanism_activated": sim_big_energy_mechanism_activated,
+		}
+	}
+	_apply_local_patch(patch)
+	_send_override_patch(patch)
+	_refresh_display()
+
+
+## UI 回调：小能量机关激活状态改变。
+func _on_small_energy_mechanism_toggled(enabled: bool) -> void:
+	if ui_updating:
+		return
+
+	sim_small_energy_mechanism_activated = enabled
+	var patch := {
+		"game": {
+			"small_energy_mechanism_activated": sim_small_energy_mechanism_activated,
+		}
+	}
+	_apply_local_patch(patch)
+	_send_override_patch(patch)
+	_refresh_display()
+
+
 ## UI 回调：Stage 选择改变 → 推送 game.stage。
 func _on_stage_selected(index: int) -> void:
 	if ui_updating:
@@ -1223,6 +1348,21 @@ func _sync_controls_from_blackboard() -> void:
 			0.0
 		)
 	))
+	sim_our_dart_nmber_of_hits = int(round(
+		_get_numeric_value(game.get("our_dart_nmber_of_hits", sim_our_dart_nmber_of_hits), 0.0)
+	))
+	sim_fortress_occupied = _get_boolean_value(
+		game.get("fortress_occupied", sim_fortress_occupied),
+		sim_fortress_occupied
+	)
+	sim_big_energy_mechanism_activated = _get_boolean_value(
+		game.get("big_energy_mechanism_activated", sim_big_energy_mechanism_activated),
+		sim_big_energy_mechanism_activated
+	)
+	sim_small_energy_mechanism_activated = _get_boolean_value(
+		game.get("small_energy_mechanism_activated", sim_small_energy_mechanism_activated),
+		sim_small_energy_mechanism_activated
+	)
 	if base_hp_spin != null:
 		base_hp_spin.value = float(sim_base_health)
 	if outpost_hp_spin != null:
@@ -1231,6 +1371,16 @@ func _sync_controls_from_blackboard() -> void:
 		remaining_time_spin.value = sim_remaining_time
 	if exchangeable_ammo_spin != null:
 		exchangeable_ammo_spin.value = float(sim_exchangeable_ammunition_quantity)
+	if dart_hits_spin != null:
+		dart_hits_spin.value = float(sim_our_dart_nmber_of_hits)
+	if fortress_occupied_toggle != null:
+		fortress_occupied_toggle.set_pressed_no_signal(sim_fortress_occupied)
+	if big_energy_mechanism_toggle != null:
+		big_energy_mechanism_toggle.set_pressed_no_signal(sim_big_energy_mechanism_activated)
+	if small_energy_mechanism_toggle != null:
+		small_energy_mechanism_toggle.set_pressed_no_signal(
+			sim_small_energy_mechanism_activated
+		)
 
 	_select_option_value(stage_select, STAGE_VALUES, str(game.get("stage", "UNKNOWN")))
 	_select_option_value(rswitch_select, SWITCH_VALUES, str(play.get("rswitch", "UNKNOWN")))

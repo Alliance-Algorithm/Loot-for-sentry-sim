@@ -444,6 +444,10 @@ struct SimState {
         std::optional<double> gold_coin;                      ///< 队伍金币(可选)
         std::optional<double> remaining_time;                 ///< 比赛剩余时间(可选)
         std::optional<double> exchangeable_ammunition_quantity; ///< 可兑换弹药量(可选)
+        std::optional<double> our_dart_nmber_of_hits;        ///< 己方飞镖命中次数(可选)
+        std::optional<bool> fortress_occupied;               ///< 己方堡垒是否被占领(可选)
+        std::optional<bool> big_energy_mechanism_activated;  ///< 大能量机关是否激活(可选)
+        std::optional<bool> small_energy_mechanism_activated; ///< 小能量机关是否激活(可选)
     };
 
     User user; ///< 用户控制状态
@@ -907,6 +911,19 @@ public:
         if (state.game.exchangeable_ammunition_quantity) {
             game["exchangeable_ammunition_quantity"] = *state.game.exchangeable_ammunition_quantity;
         }
+        if (state.game.our_dart_nmber_of_hits) {
+            game["our_dart_nmber_of_hits"] = *state.game.our_dart_nmber_of_hits;
+        }
+        if (state.game.fortress_occupied) {
+            game["fortress_occupied"] = *state.game.fortress_occupied;
+        }
+        if (state.game.big_energy_mechanism_activated) {
+            game["big_energy_mechanism_activated"] = *state.game.big_energy_mechanism_activated;
+        }
+        if (state.game.small_energy_mechanism_activated) {
+            game["small_energy_mechanism_activated"] =
+                *state.game.small_energy_mechanism_activated;
+        }
 
         auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = state.meta.timestamp;
@@ -1166,6 +1183,22 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
             state.game.exchangeable_ammunition_quantity =
                 parse_double(game["exchangeable_ammunition_quantity"]);
         }
+        if (game["our_dart_nmber_of_hits"] && !game["our_dart_nmber_of_hits"].IsNull()) {
+            state.game.our_dart_nmber_of_hits = parse_double(game["our_dart_nmber_of_hits"]);
+        }
+        if (game["fortress_occupied"] && !game["fortress_occupied"].IsNull()) {
+            state.game.fortress_occupied = parse_boolean(game["fortress_occupied"]);
+        }
+        if (game["big_energy_mechanism_activated"]
+            && !game["big_energy_mechanism_activated"].IsNull()) {
+            state.game.big_energy_mechanism_activated =
+                parse_boolean(game["big_energy_mechanism_activated"]);
+        }
+        if (game["small_energy_mechanism_activated"]
+            && !game["small_energy_mechanism_activated"].IsNull()) {
+            state.game.small_energy_mechanism_activated =
+                parse_boolean(game["small_energy_mechanism_activated"]);
+        }
     }
 
     auto meta = root["meta"];
@@ -1221,14 +1254,24 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
 
     auto game = patch["game"];
     if (game && game.IsMap()) {
-    auto filtered_game = YAML::Node{YAML::NodeType::Map};
-    if (game["stage"])
-        filtered_game["stage"] = game["stage"];
-    if (game["remaining_time"])
-        filtered_game["remaining_time"] = game["remaining_time"];
-    if (has_entries(filtered_game))
-        result["game"] = filtered_game;
-}
+        auto filtered_game = YAML::Node{YAML::NodeType::Map};
+        if (game["stage"])
+            filtered_game["stage"] = game["stage"];
+        if (game["remaining_time"])
+            filtered_game["remaining_time"] = game["remaining_time"];
+        if (game["our_dart_nmber_of_hits"])
+            filtered_game["our_dart_nmber_of_hits"] = game["our_dart_nmber_of_hits"];
+        if (game["fortress_occupied"])
+            filtered_game["fortress_occupied"] = game["fortress_occupied"];
+        if (game["big_energy_mechanism_activated"])
+            filtered_game["big_energy_mechanism_activated"] =
+                game["big_energy_mechanism_activated"];
+        if (game["small_energy_mechanism_activated"])
+            filtered_game["small_energy_mechanism_activated"] =
+                game["small_energy_mechanism_activated"];
+        if (has_entries(filtered_game))
+            result["game"] = filtered_game;
+    }
 
     auto play = patch["play"];
     if (play && play.IsMap()) {
