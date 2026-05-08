@@ -9,12 +9,10 @@ local assert_true = test_util.assert_true
 
 local api = require("api")
 
-local screen_label = "rmcs-navigation"
-local restart_log = "/tmp/rmcs-navigation-restart.log"
-local hardcopy_path = "/tmp/rmcs-navigation-screen-hardcopy.log"
+local tmux_session = "navigation"
 
-local function screen_exists()
-	local ok, _, code = os.execute(string.format("screen -S %q -Q select . >/dev/null 2>&1", screen_label))
+local function session_exists()
+	local ok, _, code = os.execute("tmux has-session -t " .. tmux_session .. " 2>/dev/null")
 	return ok == true or ok == 0 or code == 0
 end
 
@@ -22,67 +20,60 @@ local function sleep_for(seconds)
 	os.execute(string.format("sleep %.1f", seconds))
 end
 
-local function read_file(path)
-	local file = io.open(path, "r")
-	if file == nil then
-		return nil
-	end
-	local content = file:read("*a")
-	file:close()
-	return content
-end
-
-local function read_screen_output()
+local function read_tmux_output()
 	for _ = 1, 20 do
-		os.execute(string.format("screen -S %q -p 0 -X hardcopy -h %q >/dev/null 2>&1", screen_label, hardcopy_path))
-		local content = read_file(hardcopy_path)
-		if content ~= nil and content ~= "" then
-			return content
+		local handle = io.popen("tmux capture-pane -t " .. tmux_session .. " -p -S -120 2>/dev/null")
+		if handle then
+			local content = handle:read("*a")
+			handle:close()
+			if content ~= nil and content ~= "" then
+				return content
+			end
 		end
 		sleep_for(0.1)
 	end
-	local content = read_file(hardcopy_path)
-	assert_true(content ~= nil and content ~= "", "restart_navigation should produce screen log output")
-	return content
+	assert_true(false, "restart_navigation should produce tmux output")
 end
 
-local function print_screen_output()
-	local content = read_screen_output()
-	print("restart_navigation.lua: screen output begin")
+local function print_tmux_output()
+	local content = read_tmux_output()
+	print("restart_navigation.lua: tmux output begin")
 	print(content)
-	print("restart_navigation.lua: screen output end")
+	print("restart_navigation.lua: tmux output end")
 end
 
-local function kill_screen()
-	os.execute(string.format("screen -S %q -X quit >/dev/null 2>&1", screen_label))
+local function kill_session()
+	os.execute("tmux kill-session -t " .. tmux_session .. " 2>/dev/null || true")
 end
 
 local function cleanup()
-	kill_screen()
-	test_util.remove_file(restart_log)
-	test_util.remove_file(hardcopy_path)
+	kill_session()
 end
 
 test_util.with_cleanup(cleanup, function()
 	cleanup()
-	test_util.remove_file(hardcopy_path)
 
-	local ok, message = api.restart_navigation("rmul")
+	local ok, message = api.restart_navigation({
+		launch_livox = false,
+		launch_odin1 = false,
+		global_map = "rmul",
+		use_sim_time = false,
+	})
 	assert_true(ok, "restart_navigation should dispatch successfully")
 	assert_eq(message, "ok", "restart_navigation dispatch result")
 
 	local deadline = os.time() + 3
 	while os.time() <= deadline do
-		if screen_exists() then
+		if session_exists() then
 			sleep_for(1.0)
-			print_screen_output()
-			kill_screen()
-			assert_true(not screen_exists(), "restart_navigation should stop screen after inspection")
+			print_tmux_output()
+			kill_session()
+			assert_true(not session_exists(), "restart_navigation should stop session after inspection")
 			print("restart_navigation.lua: ok")
 			return
 		end
 		sleep_for(0.1)
 	end
 
-	error("restart_navigation should create rmcs-navigation screen session")
+	error("restart_navigation should create navigation tmux session")
 end)
