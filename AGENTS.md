@@ -51,7 +51,7 @@ auto var = T { };
 
 ### 1) 导航相关调试方法
 
-- 使用 `screen` 管理进程（例如 `point-lio`、`livox-ros-driver`）；这些进程容易遗留，或因死锁变为僵尸进程。
+- 使用 `tmux` 管理导航进程；这些进程容易遗留，或因死锁变为僵尸进程。
 
 ### 2) 远端调试与重启 SOP（`ssh-remote command`）
 
@@ -87,19 +87,14 @@ ssh-remote command "bash -lc '
 '"
 ```
 
-#### C. `screen` 日志查看 SOP
+#### C. `tmux` 日志查看 SOP
 
-- 列出会话：`ssh-remote command "bash -lc 'screen -ls'"`
-- 在线查看：`ssh-remote command "bash -lc 'source ~/env_setup.bash && service rmcs attach'"`
+- 列出会话：`ssh-remote command "bash -lc 'tmux list-sessions'"`
+- 在线查看：`ssh-remote command "bash -lc 'tmux attach -t navigation'"`
 - 非交互抓取最近日志：
 
 ```zsh
-ssh-remote command "bash -lc 'screen -S rmcs -X hardcopy /tmp/rmcs.log'"
-ssh-remote command "python3 -c \"
-from pathlib import Path
-lines = Path('/tmp/rmcs.log').read_text(errors='ignore').splitlines()
-print('\\n'.join(lines[-120:]))
-\""
+ssh-remote command "bash -lc 'tmux capture-pane -t navigation -p -S -120'"
 ```
 
 #### D. 清理重复实例（重要）
@@ -110,8 +105,7 @@ print('\\n'.join(lines[-120:]))
 ssh-remote command "bash -lc '
   source ~/env_setup.bash
   service rmcs stop
-  screen -S rmcs -X quit || true
-  screen -S rmcs-navigation -X quit || true
+  tmux kill-session -t navigation 2>/dev/null || true
   pkill -f "ros2 launch rmcs-navigation" || true
   sleep 2
   service rmcs start

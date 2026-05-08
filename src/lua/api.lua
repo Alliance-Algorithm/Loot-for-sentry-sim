@@ -12,6 +12,7 @@ local util = require("util.native")
 --- @field warn fun(message: string)
 --- @field fuck fun(message: string)
 ---
+--- @field update_enable_control fun(enable: boolean)
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)
 --- @field update_gimbal_dominator fun(name: string)
@@ -56,27 +57,32 @@ function api.restart_navigation(config)
 		use_sim_time
 	)
 
-	-- FIXME: 存在调试用的进程(foxglove)，记得去掉
-	local command = [[
+	local template = [[
         source %q
 
-        screen -S rmcs-navigation -X quit
+        # 杀死已存在的 navigation 会话（忽略错误）
+        tmux kill-session -t navigation 2>/dev/null
 
-        screen -dmS rmcs-navigation
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
+        # 创建后台会话并启动 foxglove (窗口 0)
+        tmux new-session -d -s navigation -n "foxglove" "bash -lc 'ros2 launch foxglove_bridge foxglove_bridge_launch.xml'"
 
+        # 传入配置参数
         configs=%q
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation motion.launch.yaml $configs"
-        screen -S rmcs-navigation -X screen bash -lc "ros2 launch rmcs-navigation sensor.launch.yaml $configs"
-    ]]
-	local packed_command = string.format(command, filename, configs)
 
-	return util.run(string.format("(%s) >/dev/null 2>&1 &", packed_command))
+        # 创建新窗口启动 motion (窗口 1)
+        tmux new-window -t navigation -n "motion" "bash -lc 'ros2 launch rmcs-navigation motion.launch.yaml $configs'"
+
+        # 创建新窗口启动 sensor (窗口 2)
+        tmux new-window -t navigation -n "sensor" "bash -lc 'ros2 launch rmcs-navigation sensor.launch.yaml $configs'"
+    ]]
+	local command = string.format(template, filename, configs)
+
+	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
 end
 
 function api.stop_navigation()
 	local command = [[
-        screen -S rmcs-navigation -X quit
+        tmux kill-session -t navigation 2>/dev/null || true
     ]]
 	return util.run(string.format("(%s) >/dev/null 2>&1 &", command))
 end
