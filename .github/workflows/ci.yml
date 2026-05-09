@@ -43,13 +43,6 @@ jobs:
       - name: Checkout rmcs-navigation
         uses: actions/checkout@v5
 
-      # FIXME: 等主分支的 Dockerfile 添加上下列依赖后，删除该段
-      - name: Download dependency
-        shell: bash
-        run: |
-          apt-get update -y
-          apt-get install -y lua5.4 liblua5.4-0 liblua5.4-dev ros-$ROS_DISTRO-nav2-msgs
-
       - name: Run Lua tests
         shell: bash
         run: |

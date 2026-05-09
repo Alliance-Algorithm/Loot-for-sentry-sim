@@ -1,9 +1,3 @@
-#if defined(__clang__)
-# pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#elif defined(__GNUC__)
-# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
 #include "cxx/context.hh"
 #include "cxx/util/navigation/navigation.hh"
 #include "cxx/util/node_mixin.hh"
@@ -74,7 +68,7 @@ private:
     auto unwrap_sol(T result, std::string_view message) -> T {
         if (!result.valid()) {
             auto error = result.template get<sol::error>();
-            fuck("\n{}", error.what());
+            logging::fuck("\n{}", error.what());
             throw std::runtime_error(std::string{message});
         }
         return result;
@@ -86,9 +80,12 @@ private:
             "failed to get lua api");
 
         auto api = api_result.get<sol::table>();
-        api.set_function("info", [this](const std::string& text) { info("Lua: {}", text); });
-        api.set_function("warn", [this](const std::string& text) { warn("Lua: {}", text); });
-        api.set_function("fuck", [this](const std::string& text) { fuck("Lua: {}", text); });
+        api.set_function(
+            "info", [this](const std::string& text) { logging::info("Lua: {}", text); });
+        api.set_function(
+            "warn", [this](const std::string& text) { logging::warn("Lua: {}", text); });
+        api.set_function(
+            "fuck", [this](const std::string& text) { logging::fuck("Lua: {}", text); });
 
         // @TODO:
         //  补全这些实现
@@ -100,10 +97,10 @@ private:
             navigation.switch_topic_forward(enable);
         });
         api.set_function("update_gimbal_direction", [this](double angle) {
-            warn("unimplement: update_gimbal_direction({})", angle);
+            logging::warn("unimplement: update_gimbal_direction({})", angle);
         });
         api.set_function("update_chassis_mode", [this](const std::string& mode) {
-            warn("unimplement: update_chassis_mode(\"{}\")", mode);
+            logging::warn("unimplement: update_chassis_mode(\"{}\")", mode);
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
             *command.chassis_speed = Eigen::Vector2d{x, y};
@@ -150,7 +147,7 @@ private:
             }
         }
 
-        info("injected {} ros parameters into lua option", parameters.size());
+        logging::info("injected {} ros parameters into lua option", parameters.size());
     }
 
     auto lua_sync() {
@@ -214,19 +211,19 @@ private:
         lua_on_exit = (*lua)["on_exit"];
         if (lua_on_exit == sol::lua_nil) {
             lua_on_exit = lua->safe_script("return function() end", sol::script_pass_on_error);
-            warn("lua endpoint does not define optional on_exit(), fallback to no-op");
+            logging::warn("lua endpoint does not define optional on_exit(), fallback to no-op");
         }
         lua_on_control = (*lua)["on_control"];
         if (lua_on_control == sol::lua_nil) {
             lua_on_control =
                 lua->safe_script("return function(_, _, _) end", sol::script_pass_on_error);
-            warn("lua endpoint does not define optional on_control(), fallback to no-op");
+            logging::warn("lua endpoint does not define optional on_control(), fallback to no-op");
         }
 
         // Init Lua First
         auto init_result = unwrap_sol(lua_on_init(), "lua on_init failed");
 
-        info("Lua resource is loaded successfully");
+        logging::info("Lua resource is loaded successfully");
     }
 
     auto lua_tick() { auto result = unwrap_sol(lua_on_tick(), "lua on_tick failed"); }
@@ -255,12 +252,12 @@ public:
                 unwrap_sol(lua_on_control(vx, vy, qx), "lua on_control failed");
             });
 
-        info("Navigation is initialized");
+        logging::info("Navigation is initialized");
     }
 
     auto before_updating() -> void override {
         if (auto ok = context.health(); !ok) {
-            fuck("{}", ok.error());
+            logging::fuck("{}", ok.error());
             throw std::runtime_error{"Context Error"};
         }
     }

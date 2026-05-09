@@ -45,6 +45,11 @@ function action:bind(scheduler)
 	end)
 end
 
+--- @param enable boolean
+function action:switch_navigation(enable)
+	api.update_enable_control(enable)
+end
+
 function action:switch_topic_forward(enable)
 	api.switch_topic_forward(enable)
 end
