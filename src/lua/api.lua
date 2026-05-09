@@ -16,8 +16,7 @@ local util = require("util.native")
 --- @field send_target fun(x: number, y: number)
 --- @field update_gimbal_direction fun(angle: number)
 --- @field update_gimbal_dominator fun(name: string)
---- @field update_chassis_mode fun(mode: string)
---- @field update_chassis_vel fun(x: number, y: number)
+--- @field switch_controller fun(mode: "normal" | "road" | "step" | "slope")
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)

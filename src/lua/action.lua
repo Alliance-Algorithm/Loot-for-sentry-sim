@@ -74,12 +74,8 @@ function action:update_gimbal_dominator(name)
 	api.update_gimbal_dominator(name)
 end
 
-function action:update_chassis_mode(mode)
-	api.update_chassis_mode(mode)
-end
-
-function action:update_chassis_vel(x, y)
-	api.update_chassis_vel(x, y)
+function action:switch_controller(mode)
+	api.switch_controller(mode)
 end
 
 function action:restart_navigation(config)
