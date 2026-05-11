@@ -293,6 +293,9 @@ function M:observe_intent(intent_id, fsm)
 
 	local phase = tostring(fsm.current_state or "none")
 	if not is_result_phase(phase) then
+		-- Entering a running phase means this intent has started a fresh attempt,
+		-- so the previous failed latch must not keep the graph red.
+		self.failed_latch[intent_id] = false
 		self.last_non_result_phase[intent_id] = phase
 		return
 	end

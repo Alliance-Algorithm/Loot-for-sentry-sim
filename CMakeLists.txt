@@ -97,7 +97,7 @@ target_link_libraries(
         ${pcl_conversions_LIBRARIES}
 )
 
-add_executable(${PROJECT_NAME}-sim-sidecar src/cxx/sim_sidecar.cc)
+add_executable(${PROJECT_NAME}-sim-sidecar src/sim/Loot/sim_sidecar.cc)
 target_compile_features(
     ${PROJECT_NAME}-sim-sidecar
     PRIVATE
@@ -107,6 +107,7 @@ target_compile_definitions(
     ${PROJECT_NAME}-sim-sidecar
     PRIVATE
         RMCS_NAVIGATION_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+        RMCS_NAVIGATION_LOOT_LUA_DIR="${PROJECT_SOURCE_DIR}/src/sim/Loot/lua"
 )
 target_include_directories(
     ${PROJECT_NAME}-sim-sidecar
