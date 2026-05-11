@@ -1080,6 +1080,8 @@ struct Args {
             args.endpoint = take_next(token);
         } else if (token == "--lua-root") {
             args.lua_root = take_next(token);
+        } else if (token == "--loot-lua-root") {
+            args.loot_lua_root = take_next(token);
         } else if (token == "--tick-hz") {
             args.tick_hz = std::stod(take_next(token));
         } else if (token == "--state-timeout-ms") {
@@ -1092,6 +1094,7 @@ struct Args {
                       << "  --port <port>                (default: 34567)\n"
                       << "  --endpoint <name>            (default: competition-test)\n"
                       << "  --lua-root <path>            (default: <source>/src/lua)\n"
+                      << "  --loot-lua-root <path>       (default: <source>/src/sim/Loot/lua)\n"
                       << "  --tick-hz <hz>               (default: 10)\n"
                       << "  --state-timeout-ms <ms>      (default: 500)\n"
                       << "  --option-file <yaml/json>\n";
