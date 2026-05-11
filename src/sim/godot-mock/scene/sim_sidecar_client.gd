@@ -48,9 +48,7 @@ const LOOT_FLOW_VIEW_SCRIPT := preload("res://scene/loot_flow_view.gd")
 @onready var robot: CharacterBody3D = get_node(robot_path)
 @onready var target_point: Node3D = get_node(target_point_path)
 
-const DEBUG_PANEL_MIN_SIZE := Vector2(720, 520)
-const DEBUG_PANEL_MAX_SIZE := Vector2(1600, 980)
-const DEBUG_PANEL_MARGIN := 16.0
+const DEBUG_PANEL_SIZE := Vector2(2000, 1200)
 ## blackboard 面板显示字段。
 const BLACKBOARD_USER_DISPLAY_FIELDS := ["bullet", "gold", "health", "mode", "x", "y", "yaw"]
 const BLACKBOARD_GAME_DISPLAY_FIELDS := ["stage", "remaining_time"]
@@ -165,7 +163,6 @@ var loot_overlay: Node3D
 
 func _ready() -> void:
 	add_to_group(LUA_SIM_UI_GROUP)
-	get_viewport().size_changed.connect(_layout_debug_ui)
 	# 将敌方节点注入 AI 机器人作为跟踪目标。
 	_bind_enemy_target()
 	# 构建 Loot 3D 实时监控层。
@@ -208,7 +205,6 @@ func _set_lua_sim_panel_open(open: bool) -> void:
 	lua_sim_panel_open = open
 	if lua_sim_panel != null:
 		lua_sim_panel.visible = open
-	_layout_debug_ui()
 	_set_overlay_badges_visible(not open)
 
 	if open:
@@ -874,9 +870,12 @@ func _build_debug_ui() -> void:
 	panel.anchor_right = 0.5
 	panel.anchor_top = 0.5
 	panel.anchor_bottom = 0.5
+	panel.offset_left = -DEBUG_PANEL_SIZE.x * 0.5
+	panel.offset_right = DEBUG_PANEL_SIZE.x * 0.5
+	panel.offset_top = -DEBUG_PANEL_SIZE.y * 0.5
+	panel.offset_bottom = DEBUG_PANEL_SIZE.y * 0.5
 	panel.visible = false
 	canvas.add_child(panel)
-	_layout_debug_ui()
 
 	var root := VBoxContainer.new()
 	root.name = "Root"
@@ -1228,30 +1227,6 @@ func _build_debug_ui() -> void:
 	lua_sim_tabs.current_tab = 0
 	_set_manual_override_enabled(true)
 	_set_overlay_badges_visible(not lua_sim_panel_open)
-
-
-func _layout_debug_ui() -> void:
-	if lua_sim_panel == null:
-		return
-
-	var viewport := get_viewport()
-	if viewport == null:
-		return
-	var viewport_rect := viewport.get_visible_rect()
-	var available_width := maxf(0.0, viewport_rect.size.x - DEBUG_PANEL_MARGIN * 2.0)
-	var available_height := maxf(0.0, viewport_rect.size.y - DEBUG_PANEL_MARGIN * 2.0)
-	var panel_width := clampf(viewport_rect.size.x * 0.92, DEBUG_PANEL_MIN_SIZE.x, DEBUG_PANEL_MAX_SIZE.x)
-	var panel_height := clampf(viewport_rect.size.y * 0.88, DEBUG_PANEL_MIN_SIZE.y, DEBUG_PANEL_MAX_SIZE.y)
-
-	if available_width > 0.0:
-		panel_width = minf(panel_width, available_width)
-	if available_height > 0.0:
-		panel_height = minf(panel_height, available_height)
-
-	lua_sim_panel.offset_left = -panel_width * 0.5
-	lua_sim_panel.offset_right = panel_width * 0.5
-	lua_sim_panel.offset_top = -panel_height * 0.5
-	lua_sim_panel.offset_bottom = panel_height * 0.5
 
 
 func _set_overlay_badges_visible(visible: bool) -> void:
