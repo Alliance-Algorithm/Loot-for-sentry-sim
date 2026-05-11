@@ -42,19 +42,23 @@ extends Node
 ## 敌方机器人节点路径。
 @export var enemy_path: NodePath
 
+const LOOT_OVERLAY_SCRIPT := preload("res://scene/loot_overlay_3d.gd")
+const LOOT_FLOW_VIEW_SCRIPT := preload("res://scene/loot_flow_view.gd")
+
 @onready var robot: CharacterBody3D = get_node(robot_path)
 @onready var target_point: Node3D = get_node(target_point_path)
 
 ## 调试面板尺寸。
-const DEBUG_PANEL_SIZE := Vector2(620, 760)
-## 调试面板边距。
-const DEBUG_PANEL_MARGIN := Vector2(16, 16)
-## blackboard 的顶层分节名称。
-const BLACKBOARD_SECTIONS := ["user", "game", "play", "meta", "rule", "result"]
+const DEBUG_PANEL_SIZE := Vector2(2400, 1400)
+## blackboard 面板显示字段。
+const BLACKBOARD_USER_DISPLAY_FIELDS := ["bullet", "gold", "health", "mode", "x", "y", "yaw"]
+const BLACKBOARD_GAME_DISPLAY_FIELDS := ["stage", "remaining_time"]
 ## 游戏阶段枚举值。
 const STAGE_VALUES := ["UNKNOWN", "NOT_START", "STARTED", "ENDED"]
 ## 拨杆开关枚举值。
 const SWITCH_VALUES := ["UNKNOWN", "UP", "MID", "DOWN"]
+## 供其他节点查询 Lua Sim 面板状态的分组名。
+const LUA_SIM_UI_GROUP := "lua_sim_ui"
 
 ## TCP 连接对象。
 var tcp := StreamPeerTCP.new()
@@ -71,6 +75,10 @@ var send_accum := 0.0
 var blackboard: Dictionary = {}
 ## 最近一次决策状态快照。
 var decision_state: Dictionary = {}
+## 最近一次 Loot 语义监控快照。
+var loot_state: Dictionary = {}
+## Loot 快照版本号（跟随 blackboard 版本）。
+var loot_rev := -1
 ## blackboard 是否已完成首次接收。
 var blackboard_ready := false
 ## blackboard 版本号（去重/乱序过滤）。
@@ -122,7 +130,12 @@ var sim_small_energy_mechanism_activated := false
 var competition_started := false
 
 ## 调试 UI 控件引用。
-var decision_label: RichTextLabel
+var lua_sim_canvas: CanvasLayer
+var lua_sim_panel: Panel
+var lua_sim_tabs: TabContainer
+var lua_sim_panel_open := false
+var lua_sim_saved_mouse_mode := Input.MOUSE_MODE_VISIBLE
+var loot_flow_view: Control
 var blackboard_label: RichTextLabel
 var override_toggle: CheckButton
 var edit_box: VBoxContainer
@@ -143,11 +156,15 @@ var lswitch_select: OptionButton
 var gold_badge_value_label: Label
 var base_badge_value_label: Label
 var outpost_badge_value_label: Label
+var loot_overlay: Node3D
 
 
 func _ready() -> void:
+	add_to_group(LUA_SIM_UI_GROUP)
 	# 将敌方节点注入 AI 机器人作为跟踪目标。
 	_bind_enemy_target()
+	# 构建 Loot 3D 实时监控层。
+	_build_loot_overlay()
 	# 构建调试 UI 面板。
 	_build_debug_ui()
 	_refresh_display()
@@ -156,6 +173,41 @@ func _ready() -> void:
 	var err := tcp.connect_to_host(host, port)
 	if err != OK:
 		push_error("connect_to_host failed: %s" % err)
+
+
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey):
+		return
+
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	if key_event.keycode != KEY_TAB and key_event.physical_keycode != KEY_TAB:
+		return
+
+	_set_lua_sim_panel_open(not lua_sim_panel_open)
+	get_viewport().set_input_as_handled()
+
+
+func is_panel_open() -> bool:
+	return lua_sim_panel_open
+
+
+func _set_lua_sim_panel_open(open: bool) -> void:
+	if lua_sim_panel_open == open:
+		return
+
+	if open:
+		lua_sim_saved_mouse_mode = Input.mouse_mode
+
+	lua_sim_panel_open = open
+	if lua_sim_panel != null:
+		lua_sim_panel.visible = open
+
+	if open:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		Input.mouse_mode = lua_sim_saved_mouse_mode
 
 
 func _process(_delta: float) -> void:
@@ -171,8 +223,12 @@ func _process(_delta: float) -> void:
 		sim_time = 0.0
 		blackboard = {}
 		decision_state = {}
+		loot_state = {}
 		blackboard_ready = false
 		blackboard_rev = -1
+		loot_rev = -1
+		if loot_flow_view != null and loot_flow_view.has_method("reset"):
+			loot_flow_view.call("reset")
 		override_enabled = false
 		manual_override_enabled = false
 		auto_resupply_override_enabled = false
@@ -214,7 +270,11 @@ func _process(_delta: float) -> void:
 			connected = false
 			blackboard = {}
 			decision_state = {}
+			loot_state = {}
 			blackboard_ready = false
+			loot_rev = -1
+			if loot_flow_view != null and loot_flow_view.has_method("reset"):
+				loot_flow_view.call("reset")
 			override_enabled = false
 			manual_override_enabled = false
 			auto_resupply_override_enabled = false
@@ -360,6 +420,26 @@ func _handle_message(msg: Dictionary) -> void:
 		if typeof(payload) == TYPE_DICTIONARY:
 			decision_state = payload.duplicate(true)
 			_refresh_display()
+		return
+
+	# Loot 语义监控快照。
+	if t == "loot.snapshot":
+		var rev := int(msg.get("bb_rev", -1))
+		if rev <= loot_rev:
+			return
+
+		var payload = msg.get("loot", {})
+		if typeof(payload) != TYPE_DICTIONARY:
+			push_warning("loot.snapshot missing dictionary payload")
+			return
+
+		loot_rev = rev
+		loot_state = payload.duplicate(true)
+		if loot_overlay != null and loot_overlay.has_method("update_loot"):
+			loot_overlay.call("update_loot", loot_state)
+		if loot_flow_view != null and loot_flow_view.has_method("update_loot"):
+			loot_flow_view.call("update_loot", loot_state)
+		_refresh_display()
 		return
 
 	# 导航目标点更新（Lua 下发）。
@@ -533,6 +613,14 @@ func _get_dict_value(source: Dictionary, key: String) -> Dictionary:
 	if typeof(value) == TYPE_DICTIONARY:
 		return value
 	return {}
+
+
+## 安全获取字典中的数组值。
+func _get_array_value(source: Dictionary, key: String) -> Array:
+	var value = source.get(key, [])
+	if typeof(value) == TYPE_ARRAY:
+		return value
+	return []
 
 
 ## 安全将 Variant 转换为数值类型。
@@ -767,14 +855,23 @@ func _send_json(data: Dictionary) -> void:
 ## 包含：标题、开始决策按钮、超控复选框、编辑面板 (HP/Bullet/Stage/Switch)、
 ## Decision State 和 Blackboard 显示。
 func _build_debug_ui() -> void:
-	var canvas := CanvasLayer.new()
+	lua_sim_canvas = CanvasLayer.new()
+	var canvas := lua_sim_canvas
 	canvas.name = "LuaSimCanvas"
 	add_child(canvas)
 
-	var panel := Panel.new()
+	lua_sim_panel = Panel.new()
+	var panel := lua_sim_panel
 	panel.name = "LuaSimPanel"
-	panel.position = DEBUG_PANEL_MARGIN
-	panel.size = DEBUG_PANEL_SIZE
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -DEBUG_PANEL_SIZE.x * 0.5
+	panel.offset_right = DEBUG_PANEL_SIZE.x * 0.5
+	panel.offset_top = -DEBUG_PANEL_SIZE.y * 0.5
+	panel.offset_bottom = DEBUG_PANEL_SIZE.y * 0.5
+	panel.visible = false
 	canvas.add_child(panel)
 
 	var root := VBoxContainer.new()
@@ -788,19 +885,47 @@ func _build_debug_ui() -> void:
 	panel.add_child(root)
 
 	var title := Label.new()
-	title.text = "Lua Sim v1"
+	title.text = "Lua Sim v2"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(title)
 
-	var start_btn := Button.new()
-	start_btn.text = "Start Decision"
-	start_btn.pressed.connect(_on_start_pressed)
-	root.add_child(start_btn)
+	lua_sim_tabs = TabContainer.new()
+	lua_sim_tabs.name = "LuaSimTabs"
+	lua_sim_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lua_sim_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(lua_sim_tabs)
+
+	var loot_tab := VBoxContainer.new()
+	loot_tab.name = "Loot"
+	loot_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	loot_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	loot_tab.add_theme_constant_override("separation", 8)
+	lua_sim_tabs.add_child(loot_tab)
+
+	var edit_scroll := ScrollContainer.new()
+	edit_scroll.name = "Edit"
+	edit_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	edit_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lua_sim_tabs.add_child(edit_scroll)
+
+	var edit_root := VBoxContainer.new()
+	edit_root.name = "EditRoot"
+	edit_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	edit_root.add_theme_constant_override("separation", 6)
+	edit_scroll.add_child(edit_root)
+
+	var blackboard_tab := VBoxContainer.new()
+	blackboard_tab.name = "Blackboard"
+	blackboard_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	blackboard_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	blackboard_tab.add_theme_constant_override("separation", 8)
+	lua_sim_tabs.add_child(blackboard_tab)
 
 	override_toggle = CheckButton.new()
 	override_toggle.text = "Open Edit Panel (Godot Override)"
 	override_toggle.toggled.connect(_on_override_toggled)
-	root.add_child(override_toggle)
+	edit_root.add_child(override_toggle)
+	override_toggle.button_pressed = true
 
 	var gold_badge := PanelContainer.new()
 	gold_badge.name = "GoldBadge"
@@ -1004,9 +1129,9 @@ func _build_debug_ui() -> void:
 	outpost_badge_text.add_child(outpost_badge_value_label)
 
 	edit_box = VBoxContainer.new()
-	edit_box.visible = false
+	edit_box.visible = true
 	edit_box.add_theme_constant_override("separation", 6)
-	root.add_child(edit_box)
+	edit_root.add_child(edit_box)
 
 	hp_spin = _add_spin_row(edit_box, "HP", 0.0, 800.0, 1.0)
 	hp_spin.value_changed.connect(_on_hp_changed)
@@ -1051,26 +1176,36 @@ func _build_debug_ui() -> void:
 	lswitch_select.item_selected.connect(_on_lswitch_selected)
 
 	var decision_title := Label.new()
-	decision_title.text = "Decision State"
-	root.add_child(decision_title)
+	decision_title.text = "Loot Runtime Graph"
+	loot_tab.add_child(decision_title)
 
-	decision_label = RichTextLabel.new()
-	decision_label.fit_content = false
-	decision_label.custom_minimum_size = Vector2(0, 120)
-	decision_label.scroll_active = true
-	decision_label.selection_enabled = true
-	root.add_child(decision_label)
+	var loot_graph_scroll := ScrollContainer.new()
+	loot_graph_scroll.name = "LootGraphScroll"
+	loot_graph_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	loot_graph_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	loot_tab.add_child(loot_graph_scroll)
+
+	loot_flow_view = LOOT_FLOW_VIEW_SCRIPT.new()
+	loot_flow_view.name = "LootFlowView"
+	loot_flow_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	loot_flow_view.size_flags_vertical = Control.SIZE_FILL
+	loot_graph_scroll.add_child(loot_flow_view)
 
 	var bb_title := Label.new()
 	bb_title.text = "Blackboard"
-	root.add_child(bb_title)
+	blackboard_tab.add_child(bb_title)
 
 	blackboard_label = RichTextLabel.new()
 	blackboard_label.fit_content = false
 	blackboard_label.custom_minimum_size = Vector2(0, 360)
+	blackboard_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	blackboard_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	blackboard_label.scroll_active = true
 	blackboard_label.selection_enabled = true
-	root.add_child(blackboard_label)
+	blackboard_tab.add_child(blackboard_label)
+
+	lua_sim_tabs.current_tab = 0
+	_set_manual_override_enabled(true)
 
 
 ## 创建一行 SpinBox 控件（标签 + 数值输入），返回 SpinBox 引用。
@@ -1124,11 +1259,6 @@ func _add_check_row(parent: VBoxContainer, label_text: String) -> CheckButton:
 	toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(toggle)
 	return toggle
-
-
-## UI 回调：开始决策按钮。
-func _on_start_pressed() -> void:
-	_send_start_decision()
 
 
 ## UI 回调：超控复选框切换，显示/隐藏编辑面板并更新超控状态。
@@ -1410,8 +1540,6 @@ func _select_option_value(button: OptionButton, values: Array, value: String) ->
 
 ## 刷新调试面板显示（决策状态 + blackboard）。
 func _refresh_display() -> void:
-	if decision_label != null:
-		decision_label.text = _format_decision_text()
 	if blackboard_label != null:
 		blackboard_label.text = _format_blackboard_text()
 	_refresh_gold_badge()
@@ -1504,6 +1632,7 @@ func _format_decision_text() -> String:
 		"connected": connected,
 		"blackboard_ready": blackboard_ready,
 		"bb_rev": blackboard_rev,
+		"loot_rev": loot_rev,
 		"override_enabled": override_enabled,
 		"manual_override_enabled": manual_override_enabled,
 		"auto_resupply_override_enabled": auto_resupply_override_enabled,
@@ -1517,17 +1646,106 @@ func _format_decision_text() -> String:
 			"y": _round_float(target_point.global_position.z),
 		},
 		"decision": decision_state,
+		"loot": _format_loot_summary(),
 	}
 	return JSON.stringify(_prepare_display_value(view), "  ", true)
+
+
+## 生成 Loot 语义监控摘要，避免把完整事件流直接塞进主面板。
+func _format_loot_summary() -> Dictionary:
+	var actions: Dictionary = _get_dict_value(loot_state, "actions")
+	var decision_graph: Dictionary = _get_dict_value(loot_state, "decision_graph")
+	var fsm_root: Dictionary = _get_dict_value(loot_state, "fsm")
+	var tasks_root: Dictionary = _get_dict_value(loot_state, "tasks")
+
+	return {
+		"serial": loot_state.get("serial", 0),
+		"decision_graph": _summarize_decision_graph(decision_graph),
+		"fsm": _summarize_fsm_items(_get_array_value(fsm_root, "items")),
+		"active_tasks": _summarize_active_tasks(_get_array_value(tasks_root, "items")),
+		"last_action": actions.get("last", null),
+		"nav_target": actions.get("nav_target", null),
+	}
+
+
+func _summarize_decision_graph(graph: Dictionary) -> Dictionary:
+	var nodes: Array = _get_array_value(graph, "nodes")
+	var edges: Array = _get_array_value(graph, "edges")
+	return {
+		"id": graph.get("id", null),
+		"label": graph.get("label", null),
+		"node_count": nodes.size(),
+		"edge_count": edges.size(),
+		"current_state": graph.get("current_state", null),
+		"current_intent": graph.get("current_intent", null),
+		"current_phase": graph.get("current_phase", null),
+		"active_nodes": _get_array_value(graph, "active_nodes"),
+		"active_edges": _get_array_value(graph, "active_edges"),
+	}
+
+
+func _summarize_fsm_items(items: Array) -> Array:
+	var result: Array = []
+	for item in items:
+		if typeof(item) != TYPE_DICTIONARY:
+			continue
+		var fsm: Dictionary = item as Dictionary
+		var observed_edges: Array = _get_array_value(fsm, "observed_edges")
+		var declared_edges: Array = _get_array_value(fsm, "declared_edges")
+		result.append({
+			"id": fsm.get("id", null),
+			"current_state": fsm.get("current_state", null),
+			"last_state": fsm.get("last_state", null),
+			"transition_count": fsm.get("transition_count", 0),
+			"last_transition": fsm.get("last_transition", null),
+			"declared_edge_count": declared_edges.size(),
+			"declared_edges": declared_edges,
+			"observed_edge_count": observed_edges.size(),
+			"observed_edges": observed_edges,
+		})
+	return result
+
+
+func _summarize_active_tasks(items: Array) -> Array:
+	var result: Array = []
+	for item in items:
+		if typeof(item) != TYPE_DICTIONARY:
+			continue
+		var task: Dictionary = item as Dictionary
+		var status := str(task.get("status", ""))
+		if status == "dead" or status == "cancelled":
+			continue
+		result.append({
+			"id": task.get("id", null),
+			"source": task.get("source", null),
+			"line": task.get("line", null),
+			"status": task.get("status", null),
+			"wait_kind": task.get("wait_kind", null),
+			"wait_until": task.get("wait_until", null),
+			"resume_count": task.get("resume_count", 0),
+		})
+	return result
 
 
 ## 格式化 blackboard 文本（按分节标注）。
 func _format_blackboard_text() -> String:
 	var blocks: Array[String] = []
-	for section in BLACKBOARD_SECTIONS:
-		var value = blackboard.get(section, {})
-		blocks.append("[%s]\n%s" % [section, _stringify_pretty(value)])
+	blocks.append("[user]\n%s" % _stringify_pretty(
+		_pick_display_fields(_get_dict_value(blackboard, "user"), BLACKBOARD_USER_DISPLAY_FIELDS)
+	))
+	blocks.append("[game]\n%s" % _stringify_pretty(
+		_pick_display_fields(_get_dict_value(blackboard, "game"), BLACKBOARD_GAME_DISPLAY_FIELDS)
+	))
 	return "\n\n".join(blocks)
+
+
+## 从字典中按顺序挑选显示字段，字段不存在时不补空值。
+func _pick_display_fields(source: Dictionary, fields: Array) -> Dictionary:
+	var result := {}
+	for field in fields:
+		if source.has(field):
+			result[field] = source.get(field)
+	return result
 
 
 ## 将 Variant 格式化为美观字符串（字典/数组用 JSON）。
@@ -1574,6 +1792,15 @@ func _bind_enemy_target() -> void:
 	var enemy_node := _resolve_enemy_node()
 	if enemy_node != null and robot.has_method("set_enemy_target"):
 		robot.call("set_enemy_target", enemy_node)
+
+
+## 构建 Loot 3D 监控覆盖层。
+func _build_loot_overlay() -> void:
+	loot_overlay = LOOT_OVERLAY_SCRIPT.new()
+	loot_overlay.name = "LootOverlay3D"
+	get_parent().add_child.call_deferred(loot_overlay)
+	if loot_overlay.has_method("setup"):
+		loot_overlay.call("setup", robot, target_point)
 
 
 ## 解析敌方节点：优先使用 enemy_path，回退到 ../Enemy。

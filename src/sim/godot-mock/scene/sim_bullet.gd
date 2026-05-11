@@ -22,6 +22,8 @@ extends Area3D
 const BULLET_LAYER := 1 << 4
 ## 装甲板碰撞层（第 5 bit），子弹只检测此层。
 const ARMOR_LAYER := 1 << 5
+## 默认场地/墙体碰撞层。
+const WORLD_LAYER := 1
 
 # 注意：变量名避免与 Area3D 内置 gravity 属性冲突，故使用 gravity_accel。
 ## 当前重力加速度值。
@@ -37,9 +39,10 @@ func _ready() -> void:
 	monitoring = true
 	monitorable = false
 	collision_layer = BULLET_LAYER
-	collision_mask = ARMOR_LAYER
+	collision_mask = ARMOR_LAYER | WORLD_LAYER
 	left_life = lifetime
 	area_entered.connect(_on_area_entered)
+	body_entered.connect(_on_body_entered)
 
 	# 无预制子节点时自动创建碰撞形状和网格。
 	if get_child_count() == 0:
@@ -80,6 +83,12 @@ func _on_area_entered(area: Area3D) -> void:
 		var hit := bool(area.call("on_bullet_hit", damage, team))
 		if hit:
 			queue_free()
+
+
+## 碰到场地/墙体等静态碰撞体时销毁；机器人本体碰撞体忽略。
+func _on_body_entered(body: Node3D) -> void:
+	if body is StaticBody3D:
+		queue_free()
 
 
 ## 创建默认的 SphereShape 碰撞体和球体网格。
