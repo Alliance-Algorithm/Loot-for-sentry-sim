@@ -1,10 +1,10 @@
 /**
  * @file sim_sidecar.cc
  * @brief RMCS导航系统仿真
- * 
+ *
  * 该文件实现了RMCS导航系统的仿真侧车服务，提供Lua脚本运行时环境、
  * 网络通信接口和状态管理功能，用于在仿真环境中运行导航逻辑。
- * 
+ *
  * @author RMCS Team
  * @version 1.0.0
  */
@@ -49,35 +49,35 @@ namespace rmcs::navigation::sim {
 
 /**
  * @brief JSON值类型定义
- * 
+ *
  * 支持布尔值、双精度浮点数和字符串三种基本数据类型
  */
 using JsonValue = std::variant<bool, double, std::string>;
 
 /**
  * @brief JSON字段定义
- * 
+ *
  * 包含字段名和对应的JSON值
  */
 using JsonField = std::pair<std::string, JsonValue>;
 
 /**
  * @brief JSON字段集合
- * 
+ *
  * 用于构建JSON对象的字段列表
  */
 using JsonFields = std::vector<JsonField>;
 
 /**
  * @brief 日志级别枚举
- * 
+ *
  * 定义系统日志的严重程度级别
  */
 enum class LogLevel : std::uint8_t { Info, Warn, Error };
 
 /**
  * @brief 作用域文件描述符管理类
- * 
+ *
  * 提供RAII(资源获取即初始化)机制管理文件描述符，
  * 确保文件描述符在作用域结束时自动关闭，避免资源泄漏。
  */
@@ -86,7 +86,7 @@ struct ScopedFd {
 
     /// @brief 默认构造函数，创建无效的文件描述符
     ScopedFd() = default;
-    
+
     /// @brief 显式构造函数，接管现有文件描述符
     /// @param fd 要管理的文件描述符
     explicit ScopedFd(int fd)
@@ -100,7 +100,7 @@ struct ScopedFd {
     /// @param rhs 源对象
     ScopedFd(ScopedFd&& rhs) noexcept
         : value{std::exchange(rhs.value, -1)} {}
-    
+
     /// @brief 移动赋值运算符
     /// @param rhs 源对象
     /// @return 当前对象引用
@@ -201,10 +201,10 @@ struct ScopedFd {
 
 /**
  * @brief 递归将YAML节点追加到JSON字符串
- * 
+ *
  * 深度优先遍历YAML数据结构，将其转换为JSON格式字符串
  * 支持映射、序列和标量值的转换
- * 
+ *
  * @param result 目标JSON字符串引用
  * @param node 要转换的YAML节点
  */
@@ -250,8 +250,7 @@ auto append_json_node(std::string& result, const YAML::Node& node) -> void {
     try {
         result += std::to_string(node.as<long long>());
         return;
-    } catch (...) {
-    }
+    } catch (...) {}
 
     try {
         auto number = node.as<double>();
@@ -261,8 +260,7 @@ auto append_json_node(std::string& result, const YAML::Node& node) -> void {
             result += std::format("{:.8f}", number);
         }
         return;
-    } catch (...) {
-    }
+    } catch (...) {}
 
     result += std::format("\"{}\"", escape_json(node.as<std::string>()));
 }
@@ -275,10 +273,10 @@ auto append_json_node(std::string& result, const YAML::Node& node) -> void {
 
 /**
  * @brief 发送带换行符的完整数据行
- * 
+ *
  * 将数据包添加换行符后通过套接字发送，确保完整发送所有数据
  * 使用循环发送机制处理部分发送情况
- * 
+ *
  * @param fd 目标套接字文件描述符
  * @param payload 要发送的数据内容
  * @throws std::runtime_error 当发送失败时抛出
@@ -291,8 +289,7 @@ auto send_line(int fd, std::string_view payload) -> void {
     while (offset < packed.size()) {
         auto written = ::send(fd, packed.data() + offset, packed.size() - offset, MSG_NOSIGNAL);
         if (written <= 0) {
-            throw std::runtime_error(
-                std::format("socket send failed: {}", std::strerror(errno)));
+            throw std::runtime_error(std::format("socket send failed: {}", std::strerror(errno)));
         }
         offset += static_cast<std::size_t>(written);
     }
@@ -300,9 +297,9 @@ auto send_line(int fd, std::string_view payload) -> void {
 
 /**
  * @brief 条件赋值模板函数
- * 
+ *
  * 如果YAML节点中存在指定键且值不为空，则将其转换为目标类型并赋值
- * 
+ *
  * @tparam T 目标类型
  * @param root 根YAML节点
  * @param key 要查找的键名
@@ -311,9 +308,7 @@ auto send_line(int fd, std::string_view payload) -> void {
  */
 template <typename T>
 auto assign_if_present(
-    const YAML::Node& root,
-    std::string_view key,
-    T& target,
+    const YAML::Node& root, std::string_view key, T& target,
     const std::function<T(const YAML::Node&)>& convert) -> void {
     auto value = root[std::string{key}];
     if (!value || value.IsNull()) {
@@ -324,10 +319,10 @@ auto assign_if_present(
 
 /**
  * @brief 安全标量解析模板函数
- * 
+ *
  * 尝试解析YAML标量值，如果解析失败则返回默认值
  * 提供异常安全的类型转换机制
- * 
+ *
  * @tparam T 目标类型
  * @param node 要解析的YAML节点
  * @param fallback 解析失败时的默认值
@@ -346,15 +341,13 @@ auto parse_scalar_or(
 }
 
 [[nodiscard]] auto parse_boolean(const YAML::Node& node, bool fallback = false) -> bool {
-    return parse_scalar_or<bool>(node, fallback, [](const YAML::Node& value) {
-        return value.as<bool>();
-    });
+    return parse_scalar_or<bool>(
+        node, fallback, [](const YAML::Node& value) { return value.as<bool>(); });
 }
 
 [[nodiscard]] auto parse_double(const YAML::Node& node, double fallback = 0.0) -> double {
-    return parse_scalar_or<double>(node, fallback, [](const YAML::Node& value) {
-        return value.as<double>();
-    });
+    return parse_scalar_or<double>(
+        node, fallback, [](const YAML::Node& value) { return value.as<double>(); });
 }
 
 [[nodiscard]] auto parse_string(const YAML::Node& node, std::string fallback = {}) -> std::string {
@@ -362,7 +355,8 @@ auto parse_scalar_or(
         node, std::move(fallback), [](const YAML::Node& value) { return value.as<std::string>(); });
 }
 
-[[nodiscard]] auto parse_revision(const YAML::Node& node, std::uint64_t fallback = 0) -> std::uint64_t {
+[[nodiscard]] auto parse_revision(const YAML::Node& node, std::uint64_t fallback = 0)
+    -> std::uint64_t {
     if (!node) {
         return fallback;
     }
@@ -373,8 +367,7 @@ auto parse_scalar_or(
             return fallback;
         }
         return static_cast<std::uint64_t>(value);
-    } catch (...) {
-    }
+    } catch (...) {}
 
     try {
         auto value = node.as<double>();
@@ -382,8 +375,7 @@ auto parse_scalar_or(
             return fallback;
         }
         return static_cast<std::uint64_t>(value);
-    } catch (...) {
-    }
+    } catch (...) {}
 
     return fallback;
 }
@@ -405,13 +397,13 @@ auto parse_scalar_or(
 
 /**
  * @brief 仿真状态数据结构
- * 
+ *
  * 包含用户控制状态和元数据信息，用于描述仿真环境的当前状态
  */
 struct SimState {
     /**
      * @brief 用户控制状态
-     * 
+     *
      * 包含机器人底盘功率限制、位置坐标、朝向角等控制参数
      */
     struct User {
@@ -425,7 +417,7 @@ struct SimState {
 
     /**
      * @brief 元数据信息
-     * 
+     *
      * 包含时间戳等系统级信息
      */
     struct Meta {
@@ -439,61 +431,62 @@ struct SimState {
      * 用于驱动比赛策略中的守家和前哨站相关判断。
      */
     struct Game {
-        std::optional<double> base_health;                    ///< 基地血量(可选)
-        std::optional<double> outpost_health;                 ///< 前哨站血量(可选)
-        std::optional<double> gold_coin;                      ///< 队伍金币(可选)
-        std::optional<double> remaining_time;                 ///< 比赛剩余时间(可选)
+        std::optional<double> base_health;                      ///< 基地血量(可选)
+        std::optional<double> outpost_health;                   ///< 前哨站血量(可选)
+        std::optional<double> gold_coin;                        ///< 队伍金币(可选)
+        std::optional<double> remaining_time;                   ///< 比赛剩余时间(可选)
         std::optional<double> exchangeable_ammunition_quantity; ///< 可兑换弹药量(可选)
-        std::optional<double> our_dart_nmber_of_hits;        ///< 己方飞镖命中次数(可选)
-        std::optional<bool> fortress_occupied;               ///< 己方堡垒是否被占领(可选)
-        std::optional<bool> big_energy_mechanism_activated;  ///< 大能量机关是否激活(可选)
-        std::optional<bool> small_energy_mechanism_activated; ///< 小能量机关是否激活(可选)
+        std::optional<double> our_dart_nmber_of_hits;           ///< 己方飞镖命中次数(可选)
+        std::optional<bool> fortress_occupied;                  ///< 己方堡垒是否被占领(可选)
+        std::optional<bool> big_energy_mechanism_activated;     ///< 大能量机关是否激活(可选)
+        std::optional<bool> small_energy_mechanism_activated;   ///< 小能量机关是否激活(可选)
     };
 
-    User user; ///< 用户控制状态
-    Game game; ///< 比赛全局状态
-    Meta meta; ///< 元数据信息
+    User user;                                                  ///< 用户控制状态
+    Game game;                                                  ///< 比赛全局状态
+    Meta meta;                                                  ///< 元数据信息
 };
 
 /**
  * @brief 状态覆盖配置结构
- * 
+ *
  * 用于管理状态覆盖功能，支持动态修改仿真状态
  */
 struct OverrideState {
-    bool enabled = false;                   ///< 是否启用状态覆盖
-    std::uint64_t last_rev = 0;             ///< 最后修订版本号
-    std::optional<YAML::Node> patch;        ///< 状态补丁配置
+    bool enabled = false;            ///< 是否启用状态覆盖
+    std::uint64_t last_rev = 0;      ///< 最后修订版本号
+    std::optional<YAML::Node> patch; ///< 状态补丁配置
 };
 
 /**
  * @brief Lua运行时环境管理类
- * 
+ *
  * 负责管理Lua脚本的执行环境，包括脚本加载、函数调用、
  * 状态同步和错误处理等功能。
  */
 class LuaRuntime {
 private:
-    using EmitFn = std::function<void(const JsonFields&)>; ///< 事件发射函数类型
+    using EmitFn = std::function<void(const JsonFields&)>;           ///< 事件发射函数类型
     using LogFn = std::function<void(LogLevel, const std::string&)>; ///< 日志记录函数类型
 
-    std::unique_ptr<sol::state> lua;           ///< Lua状态机实例
-    sol::table blackboard;                     ///< 共享数据黑板
-    sol::protected_function on_init;           ///< 初始化回调函数
-    sol::protected_function on_tick;           ///< 定时回调函数
-    sol::protected_function on_exit;           ///< 退出回调函数
-    sol::protected_function on_control;        ///< 控制输入回调函数
-    sol::protected_function blackboard_snapshot; ///< 黑板快照函数
+    std::unique_ptr<sol::state> lua;                                 ///< Lua状态机实例
+    sol::table blackboard;                                           ///< 共享数据黑板
+    sol::protected_function on_init;                                 ///< 初始化回调函数
+    sol::protected_function on_tick;                                 ///< 定时回调函数
+    sol::protected_function on_exit;                                 ///< 退出回调函数
+    sol::protected_function on_control;                              ///< 控制输入回调函数
+    sol::protected_function blackboard_snapshot;                     ///< 黑板快照函数
+    sol::protected_function loot_snapshot;                           ///< Loot语义监控快照函数
 
-    EmitFn emit; ///< 事件发射器
-    LogFn log;   ///< 日志记录器
-    bool closed = false; ///< 运行时是否已关闭
+    EmitFn emit;                                                     ///< 事件发射器
+    LogFn log;                                                       ///< 日志记录器
+    bool closed = false;                                             ///< 运行时是否已关闭
 
     /**
      * @brief 解包Lua函数调用结果
-     * 
+     *
      * 检查Lua函数调用是否成功，如果失败则抛出异常并包含错误信息
-     * 
+     *
      * @tparam Result 结果类型
      * @param result Lua函数调用结果
      * @param message 错误消息前缀
@@ -511,41 +504,44 @@ private:
 
     /**
      * @brief 发射日志事件
-     * 
+     *
      * 将日志消息同时发送到本地日志系统和远程客户端
-     * 
+     *
      * @param level 日志级别
      * @param message 日志消息内容
      */
     auto emit_log(LogLevel level, const std::string& message) -> void {
         log(level, message);
-        emit(JsonFields{
-            {"type", std::string{"sim.log"}},
-            {"level", std::string{to_string(level)}},
-            {"message", message},
-        });
+        emit(
+            JsonFields{
+                {"type", std::string{"sim.log"}},
+                {"level", std::string{to_string(level)}},
+                {"message", message},
+            });
     }
 
     /**
      * @brief 设置Lua包搜索路径
-     * 
+     *
      * 配置Lua模块搜索路径，确保能够正确加载项目中的Lua脚本
-     * 
+     *
      * @param lua_root Lua脚本根目录路径
+     * @param loot_lua_root Loot Lua脚本根目录路径
      */
-    auto set_package_path(const std::string& lua_root) -> void {
+    auto set_package_path(const std::string& lua_root, const std::string& loot_lua_root) -> void {
         auto package = (*lua)["package"].get<sol::table>();
         auto package_path = package["path"].get_or(std::string{});
         package["path"] = std::format(
-            "{};{}/?.lua;{}/?/init.lua", package_path, lua_root, lua_root);
+            "{};{}/?.lua;{}/?/init.lua;{}/?.lua;{}/?/init.lua", package_path, lua_root, lua_root,
+            loot_lua_root, loot_lua_root);
     }
 
     /**
      * @brief 将YAML节点转换为Lua对象
-     * 
+     *
      * 递归地将YAML数据结构转换为对应的Lua数据类型，
      * 支持映射、序列和标量值的转换
-     * 
+     *
      * @param node YAML节点
      * @return sol::object 对应的Lua对象
      */
@@ -574,22 +570,20 @@ private:
 
         try {
             return sol::make_object(*lua, node.as<long long>());
-        } catch (...) {
-        }
+        } catch (...) {}
 
         try {
             return sol::make_object(*lua, node.as<double>());
-        } catch (...) {
-        }
+        } catch (...) {}
 
         return sol::make_object(*lua, node.as<std::string>());
     }
 
     /**
      * @brief 应用表格补丁
-     * 
+     *
      * 递归地将YAML补丁应用到Lua表格中，支持嵌套结构的深度合并
-     * 
+     *
      * @param table 目标Lua表格
      * @param patch YAML补丁配置
      */
@@ -624,10 +618,10 @@ private:
 
     /**
      * @brief 判断Lua表格是否为数组
-     * 
+     *
      * 检查Lua表格是否具有连续的整数键（从1开始），
      * 用于确定应该将表格转换为YAML序列还是映射
-     * 
+     *
      * @param table 要检查的Lua表格
      * @return true 表格是数组，false 表格是映射
      */
@@ -665,10 +659,10 @@ private:
 
     /**
      * @brief 将Lua对象转换为YAML节点
-     * 
+     *
      * 递归地将Lua数据类型转换为对应的YAML数据结构，
      * 支持nil、布尔值、数字、字符串和表格的转换
-     * 
+     *
      * @param object Lua对象
      * @return YAML::Node 对应的YAML节点
      */
@@ -687,7 +681,8 @@ private:
                     count = std::max(count, static_cast<std::size_t>(entry.first.as<double>()));
                 }
                 for (auto index = std::size_t{1}; index <= count; ++index) {
-                    sequence.push_back(lua_to_yaml(table[static_cast<int>(index)].get<sol::object>()));
+                    sequence.push_back(
+                        lua_to_yaml(table[static_cast<int>(index)].get<sol::object>()));
                 }
                 return sequence;
             }
@@ -698,7 +693,8 @@ private:
                     continue;
                 }
 
-                mapping[entry.first.as<std::string>()] = lua_to_yaml(entry.second.as<sol::object>());
+                mapping[entry.first.as<std::string>()] =
+                    lua_to_yaml(entry.second.as<sol::object>());
             }
             return mapping;
         }
@@ -708,7 +704,7 @@ private:
 
     /**
      * @brief 注入API函数到Lua环境
-     * 
+     *
      * 将C++实现的API函数注册到Lua环境中，供Lua脚本调用
      * 包括日志记录、导航控制、底盘控制等功能
      */
@@ -718,41 +714,49 @@ private:
             "failed to load api");
 
         auto api = api_result.get<sol::table>();
-        api.set_function("info", [this](const std::string& text) { emit_log(LogLevel::Info, text); });
-        api.set_function("warn", [this](const std::string& text) { emit_log(LogLevel::Warn, text); });
-        api.set_function("fuck", [this](const std::string& text) { emit_log(LogLevel::Error, text); });
+        api.set_function(
+            "info", [this](const std::string& text) { emit_log(LogLevel::Info, text); });
+        api.set_function(
+            "warn", [this](const std::string& text) { emit_log(LogLevel::Warn, text); });
+        api.set_function(
+            "fuck", [this](const std::string& text) { emit_log(LogLevel::Error, text); });
 
         api.set_function("send_target", [this](double x, double y) {
-            emit(JsonFields{
-                {"type", std::string{"sim.nav_target"}},
-                {"x", x},
-                {"y", y},
-            });
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.nav_target"}},
+                    {"x", x},
+                    {"y", y},
+                });
         });
         api.set_function("update_gimbal_direction", [this](double angle) {
-            emit(JsonFields{
-                {"type", std::string{"sim.gimbal_direction"}},
-                {"angle", angle},
-            });
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.gimbal_direction"}},
+                    {"angle", angle},
+                });
         });
         api.set_function("update_gimbal_dominator", [this](const std::string& name) {
-            emit(JsonFields{
-                {"type", std::string{"sim.gimbal_dominator"}},
-                {"name", name},
-            });
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.gimbal_dominator"}},
+                    {"name", name},
+                });
         });
         api.set_function("update_chassis_mode", [this](const std::string& mode) {
-            emit(JsonFields{
-                {"type", std::string{"sim.chassis_mode"}},
-                {"mode", mode},
-            });
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.chassis_mode"}},
+                    {"mode", mode},
+                });
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
-            emit(JsonFields{
-                {"type", std::string{"sim.chassis_vel"}},
-                {"x", x},
-                {"y", y},
-            });
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.chassis_vel"}},
+                    {"x", x},
+                    {"y", y},
+                });
         });
 
         // Sidecar mode: keep these entry points but avoid touching ROS processes.
@@ -787,11 +791,12 @@ private:
 public:
     /**
      * @brief LuaRuntime构造函数
-     * 
+     *
      * 初始化Lua运行时环境，加载必要的库、配置包路径、注入API函数，
      * 并加载指定的Lua端点脚本
-     * 
+     *
      * @param lua_root Lua脚本根目录路径
+     * @param loot_lua_root Loot Lua脚本根目录路径
      * @param endpoint 要加载的Lua端点名称
      * @param emit_action 事件发射函数
      * @param log_action 日志记录函数
@@ -800,11 +805,8 @@ public:
      */
 
     explicit LuaRuntime(
-        const std::string& lua_root,
-        const std::string& endpoint,
-        EmitFn emit_action,
-        LogFn log_action,
-        std::optional<YAML::Node> option_patch = std::nullopt)
+        const std::string& lua_root, const std::string& loot_lua_root, const std::string& endpoint,
+        EmitFn emit_action, LogFn log_action, std::optional<YAML::Node> option_patch = std::nullopt)
         : lua{std::make_unique<sol::state>()}
         , emit{std::move(emit_action)}
         , log{std::move(log_action)} {
@@ -812,19 +814,33 @@ public:
             sol::lib::base, sol::lib::coroutine, sol::lib::math, sol::lib::os, sol::lib::package,
             sol::lib::string, sol::lib::table, sol::lib::debug, sol::lib::io);
 
-        set_package_path(lua_root);
+        set_package_path(lua_root, loot_lua_root);
         inject_api();
         inject_option(option_patch);
 
+        auto loot_result = unwrap_result(
+            lua->safe_script("return require('Loot')", sol::script_pass_on_error),
+            "failed to load Loot");
+        auto loot = loot_result.get<sol::table>();
+        auto loot_install = loot["install"].get<sol::protected_function>();
+        if (!loot_install.valid()) {
+            throw std::runtime_error("Loot must define install()");
+        }
+        auto installed_result = unwrap_result(loot_install(endpoint), "Loot install failed");
+        auto installed = installed_result.get<sol::table>();
+        loot_snapshot = installed["snapshot"];
+        if (!loot_snapshot.valid()) {
+            throw std::runtime_error("Loot install result must define snapshot()");
+        }
+
         auto required = std::format("require('endpoint.{}')", endpoint);
         auto endpoint_result = unwrap_result(
-            lua->safe_script(required, sol::script_pass_on_error),
-            "failed to load endpoint");
+            lua->safe_script(required, sol::script_pass_on_error), "failed to load endpoint");
         (void)endpoint_result;
 
         auto blackboard_sync_result = unwrap_result(
-            lua->safe_script("return require('blackboard_sync')", sol::script_pass_on_error),
-            "failed to load blackboard_sync");
+            lua->safe_script("return require('Loot.blackboard_sync')", sol::script_pass_on_error),
+            "failed to load Loot.blackboard_sync");
         auto blackboard_sync = blackboard_sync_result.get<sol::table>();
 
         blackboard = (*lua)["blackboard"];
@@ -840,12 +856,13 @@ public:
         }
         on_control = (*lua)["on_control"];
         if (on_control == sol::lua_nil) {
-            on_control = lua->safe_script("return function(_, _, _) end", sol::script_pass_on_error);
+            on_control =
+                lua->safe_script("return function(_, _, _) end", sol::script_pass_on_error);
         }
 
         blackboard_snapshot = blackboard_sync["snapshot"];
         if (!blackboard_snapshot.valid()) {
-            throw std::runtime_error("blackboard_sync must define snapshot()");
+            throw std::runtime_error("Loot.blackboard_sync must define snapshot()");
         }
 
         unwrap_result(on_init(), "lua on_init failed");
@@ -857,7 +874,7 @@ public:
 
     /**
      * @brief 关闭Lua运行时
-     * 
+     *
      * 执行清理操作，调用Lua端点的on_exit函数，
      * 确保资源正确释放，避免内存泄漏
      */
@@ -875,10 +892,10 @@ public:
 
     /**
      * @brief 应用仿真状态到Lua黑板
-     * 
+     *
      * 将C++端的仿真状态同步到Lua运行时的共享数据黑板，
      * 支持可选字段的健康值和子弹数量更新
-     * 
+     *
      * @param state 要应用的仿真状态
      */
 
@@ -921,8 +938,7 @@ public:
             game["big_energy_mechanism_activated"] = *state.game.big_energy_mechanism_activated;
         }
         if (state.game.small_energy_mechanism_activated) {
-            game["small_energy_mechanism_activated"] =
-                *state.game.small_energy_mechanism_activated;
+            game["small_energy_mechanism_activated"] = *state.game.small_energy_mechanism_activated;
         }
 
         auto meta = blackboard["meta"].get<sol::table>();
@@ -931,10 +947,10 @@ public:
 
     /**
      * @brief 应用状态覆盖补丁
-     * 
+     *
      * 将YAML格式的状态覆盖补丁应用到Lua黑板，
      * 支持动态修改仿真状态参数
-     * 
+     *
      * @param patch 状态覆盖补丁
      */
 
@@ -944,10 +960,10 @@ public:
 
     /**
      * @brief 获取Lua黑板快照
-     * 
+     *
      * 调用Lua端的快照函数，将当前黑板状态转换为YAML格式，
      * 用于状态报告和决策状态构建
-     * 
+     *
      * @return YAML::Node 黑板状态快照
      * @throws std::runtime_error 当快照操作失败时抛出
      */
@@ -956,12 +972,17 @@ public:
         return lua_to_yaml(result.get<sol::object>());
     }
 
+    [[nodiscard]] auto snapshot_loot() -> YAML::Node {
+        auto result = unwrap_result(loot_snapshot(), "lua loot snapshot failed");
+        return lua_to_yaml(result.get<sol::object>());
+    }
+
     /**
      * @brief 执行定时回调
-     * 
+     *
      * 调用Lua端点的on_tick函数，执行周期性的逻辑处理，
      * 这是仿真循环的核心执行点
-     * 
+     *
      * @throws std::runtime_error 当定时回调执行失败时抛出
      */
 
@@ -969,9 +990,9 @@ public:
 
     /**
      * @brief 输入控制命令
-     * 
+     *
      * 将控制输入传递给Lua端点，用于处理底盘速度控制等命令
-     * 
+     *
      * @param vx X方向速度
      * @param vy Y方向速度
      * @param qx 旋转控制参数
@@ -984,9 +1005,9 @@ public:
 
     /**
      * @brief 调用仿真目标设置函数
-     * 
+     *
      * 如果Lua端点定义了on_sim_set_target函数，则调用该函数设置目标位置
-     * 
+     *
      * @param x 目标X坐标
      * @param y 目标Y坐标
      */
@@ -1001,10 +1022,10 @@ public:
 
     /**
      * @brief 调用仿真启动函数
-     * 
+     *
      * 如果Lua端点定义了on_sim_start函数，则调用该函数启动仿真，
      * 支持可选的目标位置参数
-     * 
+     *
      * @param x 可选的目标X坐标
      * @param y 可选的目标Y坐标
      */
@@ -1025,17 +1046,18 @@ public:
 
 /**
  * @brief 命令行参数结构
- * 
+ *
  * 存储仿真侧车服务的运行配置参数
  */
 struct Args {
-    std::string host = "0.0.0.0";           ///< 服务器绑定主机地址
-    int port = 34567;                        ///< 服务器绑定端口号
-    std::string endpoint = "train-decision"; ///< Lua端点名称
+    std::string host = "0.0.0.0";                                 ///< 服务器绑定主机地址
+    int port = 34567;                                             ///< 服务器绑定端口号
+    std::string endpoint = "competition-test";                    ///< Lua端点名称
     std::string lua_root = RMCS_NAVIGATION_SOURCE_DIR "/src/lua"; ///< Lua脚本根目录
-    double tick_hz = 10.0;                   ///< 定时器频率(Hz)
-    int state_timeout_ms = 500;              ///< 状态超时时间(毫秒)
-    std::optional<std::string> option_file;  ///< 可选配置文件路径
+    std::string loot_lua_root = RMCS_NAVIGATION_LOOT_LUA_DIR;     ///< Loot Lua脚本根目录
+    double tick_hz = 10.0;                                        ///< 定时器频率(Hz)
+    int state_timeout_ms = 500;                                   ///< 状态超时时间(毫秒)
+    std::optional<std::string> option_file;                       ///< 可选配置文件路径
 };
 
 [[nodiscard]] auto parse_args(int argc, char** argv) -> Args {
@@ -1065,15 +1087,14 @@ struct Args {
         } else if (token == "--option-file") {
             args.option_file = take_next(token);
         } else if (token == "--help" || token == "-h") {
-            std::cout
-                << "rmcs-navigation-sim-sidecar\n"
-                << "  --host <host>                (default: 0.0.0.0)\n"
-                << "  --port <port>                (default: 34567)\n"
-                << "  --endpoint <name>            (default: train-decision)\n"
-                << "  --lua-root <path>            (default: <source>/src/lua)\n"
-                << "  --tick-hz <hz>               (default: 10)\n"
-                << "  --state-timeout-ms <ms>      (default: 500)\n"
-                << "  --option-file <yaml/json>\n";
+            std::cout << "rmcs-navigation-sim-sidecar\n"
+                      << "  --host <host>                (default: 0.0.0.0)\n"
+                      << "  --port <port>                (default: 34567)\n"
+                      << "  --endpoint <name>            (default: competition-test)\n"
+                      << "  --lua-root <path>            (default: <source>/src/lua)\n"
+                      << "  --tick-hz <hz>               (default: 10)\n"
+                      << "  --state-timeout-ms <ms>      (default: 500)\n"
+                      << "  --option-file <yaml/json>\n";
             std::exit(0);
         } else {
             throw std::runtime_error(std::format("unknown argument: {}", token));
@@ -1132,10 +1153,10 @@ struct Args {
 
 /**
  * @brief 从YAML负载更新仿真状态
- * 
+ *
  * 解析接收到的YAML消息，更新用户状态和元数据
  * 支持可选字段的健康值和子弹数量更新
- * 
+ *
  * @param root 接收到的YAML根节点
  * @param state 要更新的仿真状态引用
  */
@@ -1143,19 +1164,14 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
     auto user = root["user"];
     if (user && user.IsMap()) {
         assign_if_present<double>(
-            user,
-            "chassis_power_limit",
-            state.user.chassis_power_limit,
+            user, "chassis_power_limit", state.user.chassis_power_limit,
             [](const YAML::Node& node) { return parse_double(node); });
-        assign_if_present<double>(user, "x", state.user.x, [](const YAML::Node& node) {
-            return parse_double(node);
-        });
-        assign_if_present<double>(user, "y", state.user.y, [](const YAML::Node& node) {
-            return parse_double(node);
-        });
-        assign_if_present<double>(user, "yaw", state.user.yaw, [](const YAML::Node& node) {
-            return parse_double(node);
-        });
+        assign_if_present<double>(
+            user, "x", state.user.x, [](const YAML::Node& node) { return parse_double(node); });
+        assign_if_present<double>(
+            user, "y", state.user.y, [](const YAML::Node& node) { return parse_double(node); });
+        assign_if_present<double>(
+            user, "yaw", state.user.yaw, [](const YAML::Node& node) { return parse_double(node); });
         if (user["health"] && !user["health"].IsNull()) {
             state.user.health = parse_double(user["health"]);
         }
@@ -1204,18 +1220,16 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
     auto meta = root["meta"];
     if (meta && meta.IsMap()) {
         assign_if_present<double>(
-            meta,
-            "timestamp",
-            state.meta.timestamp,
+            meta, "timestamp", state.meta.timestamp,
             [](const YAML::Node& node) { return parse_double(node); });
     }
 }
 
 /**
  * @brief 检查YAML节点是否包含有效条目
- * 
+ *
  * 验证节点是否为非空映射，用于判断是否需要进行进一步处理
- * 
+ *
  * @param node 要检查的YAML节点
  * @return true 节点包含有效条目，false 节点为空或无效
  */
@@ -1225,10 +1239,10 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
 
 /**
  * @brief 过滤状态覆盖补丁
- * 
+ *
  * 从完整的覆盖补丁中提取允许修改的字段，
  * 限制客户端只能修改特定的状态字段，确保系统安全性
- * 
+ *
  * @param patch 原始覆盖补丁
  * @return YAML::Node 过滤后的安全补丁
  */
@@ -1292,10 +1306,10 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
 
 /**
  * @brief 构建决策状态快照
- * 
+ *
  * 从完整的Lua黑板快照中提取决策相关的关键状态信息，
  * 用于向客户端报告当前决策状态和任务进度
- * 
+ *
  * @param snapshot Lua黑板完整快照
  * @return YAML::Node 精简的决策状态信息
  */
@@ -1358,19 +1372,17 @@ struct ClientRuntime {
 
 /**
  * @brief 处理客户端消息
- * 
+ *
  * 根据消息类型分发处理逻辑，支持状态更新、控制输入、
  * 状态覆盖和仿真控制等不同类型的消息
- * 
+ *
  * @param runtime Lua运行时环境
  * @param root 接收到的消息根节点
  * @param context 客户端运行时上下文
  * @param log 日志记录函数
  */
 auto process_message(
-    LuaRuntime& runtime,
-    const YAML::Node& root,
-    ClientRuntime& context,
+    LuaRuntime& runtime, const YAML::Node& root, ClientRuntime& context,
     const std::function<void(LogLevel, const std::string&)>& log) -> void {
     auto type_node = root["type"];
     if (!type_node) {
@@ -1417,9 +1429,9 @@ auto process_message(
             context.override_state.patch.reset();
         }
 
-        log(
-            LogLevel::Info,
-            std::format("override mode -> {}", context.override_state.enabled ? "enabled" : "disabled"));
+        log(LogLevel::Info,
+            std::format(
+                "override mode -> {}", context.override_state.enabled ? "enabled" : "disabled"));
 
         context.has_input = true;
         context.last_input_time = now;
@@ -1455,7 +1467,8 @@ auto process_message(
 
         if (!context.override_state.enabled) {
             context.override_state.patch.reset();
-            log(LogLevel::Warn, std::format("override patch rev={} ignored while mode disabled", rev));
+            log(LogLevel::Warn,
+                std::format("override patch rev={} ignored while mode disabled", rev));
             return;
         }
 
@@ -1517,11 +1530,7 @@ auto handle_client(const Args& args, int client_fd) -> void {
     }
 
     auto runtime = LuaRuntime{
-        args.lua_root,
-        args.endpoint,
-        write_message,
-        logger,
-        option_patch,
+        args.lua_root, args.loot_lua_root, args.endpoint, write_message, logger, option_patch,
     };
 
     auto emit_runtime_state = [&]() {
@@ -1539,13 +1548,18 @@ auto handle_client(const Args& args, int client_fd) -> void {
         decision_msg["bb_rev"] = static_cast<long long>(bb_rev);
         decision_msg["state"] = build_decision_state(snapshot);
         send_line(client_fd, to_json(decision_msg));
+
+        auto loot_msg = YAML::Node{YAML::NodeType::Map};
+        loot_msg["type"] = "loot.snapshot";
+        loot_msg["bb_rev"] = static_cast<long long>(bb_rev);
+        loot_msg["loot"] = runtime.snapshot_loot();
+        send_line(client_fd, to_json(loot_msg));
     };
 
     emit_runtime_state();
 
-    auto period =
-        std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-            std::chrono::duration<double>{1.0 / args.tick_hz});
+    auto period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>{1.0 / args.tick_hz});
     auto next_tick = std::chrono::steady_clock::now() + period;
 
     while (true) {
@@ -1626,7 +1640,8 @@ auto handle_client(const Args& args, int client_fd) -> void {
         }
 
         runtime.apply_state(context.state);
-        if (context.override_state.enabled && context.override_state.patch && context.override_state.patch->IsMap()) {
+        if (context.override_state.enabled && context.override_state.patch
+            && context.override_state.patch->IsMap()) {
             runtime.apply_override_patch(*context.override_state.patch);
         }
 
@@ -1637,8 +1652,7 @@ auto handle_client(const Args& args, int client_fd) -> void {
             if (!context.waiting_for_initial_remaining_time_logged) {
                 context.waiting_for_initial_remaining_time_logged = true;
                 logger(
-                    LogLevel::Info,
-                    "waiting for initial game.remaining_time before STARTED tick");
+                    LogLevel::Info, "waiting for initial game.remaining_time before STARTED tick");
             }
             emit_runtime_state();
             continue;
@@ -1646,7 +1660,8 @@ auto handle_client(const Args& args, int client_fd) -> void {
 
         runtime.tick();
 
-        if (context.override_state.enabled && context.override_state.patch && context.override_state.patch->IsMap()) {
+        if (context.override_state.enabled && context.override_state.patch
+            && context.override_state.patch->IsMap()) {
             runtime.apply_override_patch(*context.override_state.patch);
         }
 
@@ -1657,9 +1672,7 @@ auto handle_client(const Args& args, int client_fd) -> void {
 auto run(const Args& args) -> int {
     auto server = create_server_socket(args.host, args.port);
     std::cerr << std::format(
-        "[sim-sidecar][info] listening on {}:{}, endpoint={}\n",
-        args.host,
-        args.port,
+        "[sim-sidecar][info] listening on {}:{}, endpoint={}\n", args.host, args.port,
         args.endpoint);
 
     while (true) {

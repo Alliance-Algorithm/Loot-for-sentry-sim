@@ -34,10 +34,10 @@ local runtime = {
 	region = nil,
 	region_name = "unknown",
 	region_phase = Region.Phase.unknown,
-	current_state = "idle",
-	current_phase = "none",
 	current_intent_kind = nil,
 	current_intent = nil,
+	current_phase = "none",
+	fsm_state = "idle",
 	navigation_ready = false,
 	escape_route = nil,
 	forward_press_mode = nil,
@@ -63,7 +63,7 @@ local function read_option(name, fallback)
 	end
 	return value
 end
-
+--
 local function configure_test_rule()
 	local rule = blackboard.rule
 
@@ -161,10 +161,10 @@ local function take_request(name)
 end
 
 local function set_state(name)
-	if runtime.current_state == name then
+	if runtime.fsm_state == name then
 		return
 	end
-	runtime.current_state = name
+	runtime.fsm_state = name
 	blackboard.meta.fsm_state = name
 	action:info("fsm state -> " .. name)
 end
@@ -336,7 +336,25 @@ local function sync_intent_phase()
 		set_phase("none")
 		return
 	end
-	set_phase(runtime.current_intent:phase_name())
+	local new_phase = runtime.current_intent:phase_name()
+	set_phase(new_phase)
+
+	-- if old_phase == "descend_onestep" and new_phase ~= "descend_onestep" and new_phase ~= "failed" then
+	-- 		scheduler:append_task(function()
+	-- 				for attempt = 1, 5 do
+	-- 						local ok = action:relocalize_local(3.0)
+	-- 						if ok then
+	-- 								action:info(string.format("local ok after descend_onestep (attempt %d)", attempt))
+	-- 								return
+	-- 						end
+
+	-- 						action:warn(string.format("local failed after descend_onestep (attempt %d)", attempt))
+	-- 						request:sleep(0.3)
+	-- 				end
+
+	-- 				action:warn("local exhausted after descend_onestep")
+	-- 		end)
+	-- end
 end
 
 local function spin_current_intent()
@@ -405,6 +423,22 @@ local function create_endpoint_fsm()
 			if blackboard.game.stage == "STARTED" then
 				handle:set_next(State.active)
 			end
+
+			-- if take_request("start") then
+			-- 	local ok = start_navigation()
+			-- 	if ok and blackboard.game.stage == "COUNTDOWN" then
+			-- 			ok = action:relocalize_initial(0.0, 0.0, 0.0, 15.0)
+			-- 			if not ok then
+			-- 					action:warn("initial failed, retry once")
+			-- 					ok = action:relocalize_initial(0.0, 0.0, 0.0, 15.0)
+			-- 			end
+			-- 	end
+			-- 	runtime.navigation_ready = ok
+			-- end
+
+			-- if runtime.navigation_ready and blackboard.game.stage == "STARTED" then
+			-- 		handle:set_next(State.active)
+			-- end
 		end,
 	})
 
@@ -533,7 +567,7 @@ on_init = function()
 			request:sleep(1.0)
 			action:info(string.format(
 				"fsm=%s intent=%s phase=%s region=%s hp=%s bullet=%s rs=%s ls=%s",
-				runtime.current_state,
+				runtime.fsm_state,
 				tostring(runtime.current_intent_kind),
 				runtime.current_phase,
 				runtime.region_name,

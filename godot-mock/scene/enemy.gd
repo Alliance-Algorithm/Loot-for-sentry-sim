@@ -1,6 +1,6 @@
 extends CharacterBody3D
 ## 敌方机器人，由键盘本地操控。
-## 支持 WASD 移动、空格跳跃、J 键射击，以及第一/第三人称相机切换。
+## 支持 WASD 移动、空格跳跃、右键射击、中键切换自瞄，以及第一/第三人称相机切换。
 ## 搭载四块装甲板受击判定，死亡后不可复活（仅停止运动）。
 
 @export var external_camera: Camera3D
@@ -63,6 +63,7 @@ const HEALTH_BAR_FILL_SIZE := Vector2(1.0, 0.10)
 const HEALTH_BAR_BACK_PRIORITY := 10
 const HEALTH_BAR_FILL_PRIORITY := 11
 const HEALTH_BAR_FILL_Z_OFFSET := -0.02
+const LUA_SIM_UI_GROUP := "lua_sim_ui"
 ## 四块装甲板的子节点路径（用于挂载受击判定 Area）。
 const ARMOR_NODE_PATHS := [
 	"chassis/ban1/zhuangjia1",
@@ -92,8 +93,6 @@ var auto_aim_locked_target: Node3D = null
 var auto_aim_solution_pitch := 0.0
 ## 数值求解使用的模拟步长（秒），与子弹物理步长保持一致。
 var auto_aim_sim_step_dt: float = 1.0 / AUTO_AIM_SIM_FALLBACK_HZ
-## 左键仅用于重新捕获鼠标时，阻止本次按下同时触发射击。
-var consume_left_click_fire_until_release := false
 ## 头顶血条锚点。
 var health_bar_anchor: Node3D = null
 ## 头顶血条背景。
@@ -232,6 +231,8 @@ func _tick_movement(delta: float) -> void:
 func _tick_auto_aim(delta: float) -> void:
 	auto_aim_locked_target = null
 
+	if _is_lua_sim_panel_open():
+		return
 	if not auto_aim_enabled or not fpv_cam.current:
 		return
 	if auto_aim_target == null or not is_instance_valid(auto_aim_target):
@@ -477,9 +478,11 @@ func _jump_just_pressed() -> bool:
 	return down and not jump_key_was_down
 
 
-## 检测射击按键：优先 InputMap 动作，回退到 J 键。
+## 检测射击按键：右键射击；保留 InputMap/J 键作为键盘回退。
 func _fire_pressed() -> bool:
-	if not consume_left_click_fire_until_release and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+	if _is_lua_sim_panel_open():
+		return false
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		return true
 	if InputMap.has_action(fire_action):
 		return Input.is_action_pressed(fire_action)
@@ -585,6 +588,12 @@ func _face_health_bar_to_camera() -> void:
 
 ## 输入处理：检测相机切换动作。
 func _input(event: InputEvent) -> void:
+	if _is_lua_sim_panel_open():
+		if event.is_action_pressed("switch-camera"):
+			return
+		if event is InputEventMouseButton or event is InputEventMouseMotion:
+			return
+
 	if event.is_action_pressed("switch-camera"):
 		_toggle_camera()
 		return
@@ -595,19 +604,15 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mouse_button := event as InputEventMouseButton
-		if mouse_button.button_index == MOUSE_BUTTON_RIGHT and mouse_button.pressed:
+		if mouse_button.button_index == MOUSE_BUTTON_MIDDLE and mouse_button.pressed:
 			auto_aim_enabled = not auto_aim_enabled
 			if not auto_aim_enabled:
 				auto_aim_locked_target = null
 			return
 
 		if mouse_button.button_index == MOUSE_BUTTON_LEFT:
-			if not mouse_button.pressed:
-				consume_left_click_fire_until_release = false
-				return
-			if fpv_cam.current and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			if mouse_button.pressed and fpv_cam.current and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-				consume_left_click_fire_until_release = true
 			return
 
 	if event is InputEventMouseMotion and _can_control_gimbal_with_mouse():
@@ -631,7 +636,12 @@ func _toggle_camera() -> void:
 
 
 func _can_control_gimbal_with_mouse() -> bool:
-	return fpv_cam.current and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and auto_aim_locked_target == null
+	return (
+		not _is_lua_sim_panel_open()
+		and fpv_cam.current
+		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		and auto_aim_locked_target == null
+	)
 
 
 func _apply_mouse_aim(relative: Vector2) -> void:
@@ -647,7 +657,17 @@ func _apply_mouse_aim(relative: Vector2) -> void:
 
 
 func _sync_mouse_capture() -> void:
+	if _is_lua_sim_panel_open():
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		return
 	if fpv_cam.current:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	else:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _is_lua_sim_panel_open() -> bool:
+	var ui := get_tree().get_first_node_in_group(LUA_SIM_UI_GROUP)
+	if ui == null or not ui.has_method("is_panel_open"):
+		return false
+	return bool(ui.call("is_panel_open"))
