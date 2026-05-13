@@ -15,6 +15,8 @@ local request = Scheduler.request
 
 local edges = require("util.edge").new()
 
+
+
 ---
 --- Export Context
 ---
@@ -46,7 +48,9 @@ on_init = function()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
+			-- action:update_chassis_mode("spin")
 		end)
+
 
 		while true do
 			switch_order:spin()

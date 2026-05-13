@@ -1,25 +1,22 @@
-local Intent = function()
-	local fsm
+--- 意图：撤退回家（低血量 / 手动触发）
+---
+--- 导航至堡垒/基地补充血量和弹药。
+--- 撤退期间不主动交战，优先安全回防。
 
-	-- 1 从 enemy to road
-	-- 1 执行完就跳到 2
-	-- spin task
+local action = require("action")
+local blackboard = require("blackboard").singleton()
 
-	-- 2
-	-- 2 执行完就跳到 3
+local M = {}
 
-	-- 3
-	-- 3 执行完就跳到 1
-
-	-- Check State
-	if true then
-		local area = map:localize { x = 0, y = 0 }
-		fsm:strat_with("1")
-	end
-
-	while true do
-		-- spin fsm
-	end
+function M.enter()
+	action:warn("[ESCAPE] 撤退回家")
+	local fortress = blackboard.rule.fortress.ours
+	action:navigate(fortress)
 end
 
-return Intent
+function M.event(handle)
+	-- 撤退中保持当前状态，由外部边缘（health_ready/bullet_ready）触发切换
+	handle:set_next("escape_to_home")
+end
+
+return M
