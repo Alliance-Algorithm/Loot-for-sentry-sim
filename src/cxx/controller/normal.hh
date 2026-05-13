@@ -1,5 +1,6 @@
 #pragma once
 #include "common.hh"
+#include <numbers>
 
 namespace rmcs::navigation {
 
@@ -10,15 +11,15 @@ struct NormalController : IController {
 
     auto generate_command() const -> Command override {
         // 底盘：base_link → OdomImu
-        auto rotated = Eigen::Rotation2Dd{context.current_local_yaw} * context.target_chassis_speed;
+        auto rotated = context.target_chassis_speed;
 
         // 云台：world → OdomImu
         auto target_yaw = normalize_yaw(
-            context.target_gimbal_toward.x() - context.current_world_yaw
-            + context.current_local_yaw);
+            context.target_gimbal_toward.x()
+            - context.current_world_yaw); //+ context.current_local_yaw
         return {
             .chassis_speed = rotated,
-            .chassis_mode = ChassisMode::AUTO,
+            .chassis_mode = context.chassis_mode,
             .gimbal_toward = {target_yaw, context.target_gimbal_toward.y()},
         };
     }

@@ -21,6 +21,7 @@ struct IController {
     struct Context {
         Eigen::Vector2d target_chassis_speed = kVecNan; // base_link 系，控制量
         Eigen::Vector2d target_gimbal_toward = kVecNan; // world 系 {yaw, pitch}，控制量
+        ChassisMode chassis_mode = ChassisMode::AUTO; // 底盘模式（AUTO / SPIN / …）
         double current_local_yaw = kNan; // 当前云台在Imu系的观测量（控制高频依赖，但会缓慢漂移）
         double current_world_yaw = kNan; // 当前云台在世界系的观测量
     };
