@@ -34,6 +34,8 @@ public:
     InputInterface<rmcs_description::SentryTf> tf;
     InputInterface<Eigen::Vector3d> enemy_center;
 
+    InputInterface<bool> auto_aim_should_control;
+
     explicit Context(rclcpp::Node& node, rmcs_executor::Component& component) noexcept;
 
     auto init(std::mutex& io_mutex, bool mock = false) -> void;

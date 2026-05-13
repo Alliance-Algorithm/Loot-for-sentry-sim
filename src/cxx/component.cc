@@ -2,6 +2,7 @@
 #include "cxx/controller/normal.hh"
 #include "cxx/lua_context.hh"
 #include "cxx/navigation.hh"
+#include "cxx/util/localization/engine.hh"
 #include "cxx/util/node_mixin.hh"
 
 #include <chrono>
@@ -14,6 +15,10 @@
 #include <rmcs_description/sentry_description.hpp>
 #include <rmcs_executor/component.hpp>
 #include <rmcs_msgs/rmcs_msgs.hpp> // IWYU pragma: keep
+
+#include <atomic>
+#include <limits>
+#include <memory>
 
 namespace rmcs::navigation {
 
@@ -34,12 +39,16 @@ private:
     details::Navigation navigation{*this};
     details::Context context{*this, *this};
 
+    std::unique_ptr<Localization> localization;
+    bool relocalization_enabled = true;
+
     // 控制器框架
     IController* selected_controller = nullptr;
     std::unordered_map<std::string, std::unique_ptr<IController>> controllers;
 
     Eigen::Vector2d desired_direction = Eigen::Vector2d::Zero();
     double current_world_yaw = std::numeric_limits<double>::quiet_NaN();
+    rmcs_msgs::ChassisMode current_chassis_mode = rmcs_msgs::ChassisMode::AUTO;
 
     struct Command {
         using ChassisMode = rmcs_msgs::ChassisMode;
@@ -80,6 +89,7 @@ private:
         user["x"] = x;
         user["y"] = y;
         user["yaw"] = yaw;
+        user["auto_aim_should_control"] = *context.auto_aim_should_control;
 
         auto game = blackboard["game"].get<sol::table>();
         game["stage"] = rmcs_msgs::to_string(*context.game_stage);
@@ -97,6 +107,21 @@ public:
         : rclcpp::Node{get_component_name(), option()} {
 
         mock_context = param<bool>("mock_context");
+
+        relocalization_enabled = has_parameter("enable_relocalization")
+                                   ? get_parameter_or<bool>("enable_relocalization", true)
+                                   : true;
+        if (relocalization_enabled) {
+            auto config = Localization::Config{.rclcpp = *this};
+            if (has_parameter("localization.service_name"))
+                config.service_name = get_parameter("localization.service_name").as_string();
+            if (has_parameter("localization.request_timeout_sec"))
+                config.request_timeout_sec =
+                    get_parameter("localization.request_timeout_sec").as_double();
+            localization = std::make_unique<Localization>(std::move(config));
+        } else {
+            logging::warn("relocalization is disabled by parameter enable_relocalization=false");
+        }
 
         context.init(io_mutex, mock_context);
         command.init(*this);
@@ -117,6 +142,56 @@ public:
                     selected_controller = controllers.at(mode).get();
                     logging::info("switched to controller '{}'", mode);
                 },
+            .update_chassis_mode =
+                [this](const std::string& mode) {
+                    if (mode == "spin")
+                        current_chassis_mode = rmcs_msgs::ChassisMode::SPIN;
+                    else if (mode == "step_down")
+                        current_chassis_mode = rmcs_msgs::ChassisMode::STEP_DOWN;
+                    else if (mode == "launch_ramp")
+                        current_chassis_mode = rmcs_msgs::ChassisMode::LAUNCH_RAMP;
+                    else
+                        current_chassis_mode = rmcs_msgs::ChassisMode::AUTO;
+                    logging::info("chassis mode set to '{}'", mode);
+                },
+            .update_enable_autoaim = [this](bool enable) { *command.enable_autoaim = enable; },
+
+            .relocalize_initial =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_initial ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Initial, x, y, yaw);
+                },
+            .relocalize_local =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_local ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Local, x, y, yaw);
+                },
+            .relocalize_wide =
+                [this](double x, double y, double yaw) {
+                    if (!relocalization_enabled || !localization) {
+                        logging::warn("relocalize_wide ignored: disabled");
+                        return false;
+                    }
+                    return localization->relocalize(RelocalizeMode::Wide, x, y, yaw);
+                },
+            .relocalize_status =
+                [this] {
+                    if (!relocalization_enabled || !localization) {
+                        return RelocalizeStatus{
+                            .state = RelocalizeState::FAILED,
+                            .success = false,
+                            .message = "disabled",
+                        };
+                    }
+                    return localization->relocalize_status();
+                },
+
         });
 
         controllers["normal"] = std::make_unique<NormalController>();
@@ -160,6 +235,7 @@ public:
             selected_controller->update_context({
                 .target_chassis_speed = effective_vel,
                 .target_gimbal_toward = desired_direction,
+                .chassis_mode = current_chassis_mode,
                 .current_local_yaw = current_local_yaw,
                 .current_world_yaw = current_world_yaw,
             });

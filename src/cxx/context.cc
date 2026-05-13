@@ -95,6 +95,8 @@ struct Context::Impl {
 
         make_input("/tf", context.tf, mock);
 
+        make_input("/auto_aim/should_control", context.auto_aim_should_control, mock);
+
         if (mock) {
             constexpr auto topic = "/rmcs_navigation/context/mock";
             subscription = node.create_subscription<std_msgs::msg::String>(
