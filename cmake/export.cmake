@@ -3,6 +3,10 @@ install(
     DESTINATION lib/${PROJECT_NAME}/
 )
 install(
+    TARGETS ${PROJECT_NAME}-sim-sidecar
+    DESTINATION lib/${PROJECT_NAME}/
+)
+install(
     DIRECTORY config/
     DESTINATION share/${PROJECT_NAME}/config/
 )
@@ -17,6 +21,10 @@ install(
 install(
     DIRECTORY src/lua/
     DESTINATION share/${PROJECT_NAME}/lua/
+)
+install(
+    DIRECTORY src/sim/
+    DESTINATION share/${PROJECT_NAME}/sim/
 )
 
 find_package(ament_cmake REQUIRED)

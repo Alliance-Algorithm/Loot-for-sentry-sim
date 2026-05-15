@@ -100,11 +100,11 @@ on_init = function()
 	-- 拨杆序列触发：rswitch MIDDLE → UP → MIDDLE → 启动训练
 	-- ================================================================
 	scheduler:append_task(function()
-		local switch_order = order.new(blackboard.getter.rswitch, 0.5)
+		local switch_order = order.new(blackboard.getter.rswitch, 5.0)
 		switch_order:on({ "MIDDLE", "UP", "MIDDLE" }, function()
 			action:info("训练导航即将重启")
 			action:restart_navigation({
-				global_map = "train_map",
+				global_map = "rmuc",
 				launch_livox = true,
 				launch_odin1 = false,
 				use_sim_time = false,

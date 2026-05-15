@@ -11,9 +11,9 @@ local function create_default_blackboard()
 	local result = {
 		-- Dynamic Information
 		user = {
-			health = 0,
-			bullet = 0,
-			chassis_power_limit = 0,
+			health = 400,
+			bullet = 100,
+			chassis_power_limit = 100,
 
 			chassis_power = 0,
 			chassis_buffer_energy = 0,
@@ -37,10 +37,10 @@ local function create_default_blackboard()
 			outpost_health = 0,
 			base_health = 0,
 
-			hero_health = 0,
-			infantry_1_health = 0,
-			infantry_2_health = 0,
-			engineer_health = 0,
+			hero_health = 150,
+			infantry_1_health = 150,
+			infantry_2_health = 150,
+			engineer_health = 250,
 
 			hero_position = { x = 0.0, y = 0.0 },
 			infantry_1_position = { x = 0.0, y = 0.0 },
@@ -90,10 +90,10 @@ local function create_default_blackboard()
 
 			-- 状态类规则
 
-			health_limit = 30,
+			health_limit = 60,
 			health_ready = 400,
-			bullet_limit = 0,
-			bullet_ready = 0,
+			bullet_limit = 40,
+			bullet_ready = 300,
 
 			time_of_the_competition_red_line = 90,
 			exchangeable_ammunition_quantity_red_line = 1000,
@@ -110,12 +110,12 @@ local function create_default_blackboard()
 
 			-- 普通地形坐标
 			fortress = PointPair { { 0, 0 }, { 0, 0 } },          -- 堡垒
-			resupply_zone = PointPair { { 0, 0 }, { 0, 0 } },     -- 补给点
-			road_zone_begin = PointPair { { 2.1, 0.5 }, { 0, 0 } }, -- 公路区
-			road_zone_way_point_0 = PointPair { { 3.9, -0.7 }, { 0, 0 } },
-			road_zone_way_point_1 = PointPair { { 1.3, -1.2 }, { 0, 0 } }, -- 公路区中途点1
-			road_zone_way_point_2 = PointPair { { 1.3, -2.5 }, { 0, 0 } }, -- 公路区中途点2
-			road_zone_final = PointPair { { 5.7, -2.6 }, { 0, 0 } },
+			resupply_zone = PointPair { { 3.0, 2.0 }, { 26.5, 13.5 } },     -- 补给点
+			road_zone_begin = PointPair { { 8.2, 3.7 }, { 26.5, 12.5 } }, -- 公路区
+			road_zone_way_point_0 = PointPair { { 5.8, 3.6 }, { 0, 0 } },
+			road_zone_way_point_1 = PointPair { { 5.0, 1.8 }, { 0, 0 } }, -- 公路区中途点1
+			road_zone_way_point_2 = PointPair { { 8.5, 1.5 }, { 0, 0 } }, -- 公路区中途点2
+			road_zone_final = PointPair { { 9.5, 1.2 }, { 0, 0 } },
 			road_zone_final0 = PointPair { { 5.7, -2.6 }, { 0, 0 } },
 			launch_ramp_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 飞坡
 			launch_ramp_final = PointPair { { 0, 0 }, { 0, 0 } },
