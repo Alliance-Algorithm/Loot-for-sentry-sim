@@ -1,5 +1,0 @@
-<library path="rmcs-navigation">
-  <class type="rmcs::navigation::Navigation" base_class_type="rmcs_executor::Component">
-    <description>Navigation Component For RMCS</description>
-  </class>
-</library>

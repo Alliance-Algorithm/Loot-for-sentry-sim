@@ -1,5 +1,0 @@
-global_map:
-  ros__parameters:
-    frame_id: "world"
-    topic_name: "map"
-    map_subscribe_transient_local: true
