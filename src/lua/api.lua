@@ -25,6 +25,9 @@ local util = require("util.native")
 --- @field relocalize_wide fun(x: number, y: number, yaw: number): boolean
 --- @field relocalize_status fun(): { state: integer, success: boolean, message: string, fitness_score: number, confidence: number, estimated_x: number, estimated_y: number, estimated_z: number, estimated_qx: number, estimated_qy: number, estimated_qz: number, estimated_qw: number }
 
+--- @field exchange_17mm_bullet fun(amount: integer)
+--- @field switch_mode fun(mode: number)
+--- @field confirm_revive fun()
 ---
 local api = setmetatable({}, {
 	__index = function(_, name)

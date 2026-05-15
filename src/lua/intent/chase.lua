@@ -23,15 +23,19 @@ function M.enter()
 	action:info("[CHASE] 进入追击模式，自瞄接管云台")
 	action:update_chassis_mode("spin")
 	action:update_enable_autoaim(true)
+	-- action:switch_mode(3)
+	blackboard.game.target_mode = 1
 
 	-- 导航到当前位置，覆盖巡航目标，让机器人原地待命
 	local user = blackboard.user
-	action:navigate({ x = user.x, y = user.y })
+	-- action:navigate({ x = user.x, y = user.y })
 end
 
 function M.event(handle)
 	request:sleep(3)
 	handle:set_next("chase")
+	-- action:switch_mode(3)
+	blackboard.game.target_mode = 1
 end
 
 return M

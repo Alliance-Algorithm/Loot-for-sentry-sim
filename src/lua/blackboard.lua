@@ -6,12 +6,25 @@ local function PointPair(points)
 end
 
 local function create_default_blackboard()
+	local last_our_dart_nmber_of_hits = nil
+
 	local result = {
 		-- Dynamic Information
 		user = {
 			health = 0,
 			bullet = 0,
 			chassis_power_limit = 0,
+
+			chassis_power = 0,
+			chassis_buffer_energy = 0,
+			chassis_output_status = false,
+			shooter_cooling = 0,
+			shooter_heat_limit = 0,
+			bullet_42mm = 0,
+			fortress_17mm_bullet = 0,
+			initial_speed = 0,
+			shoot_timestamp = 0,
+
 			x = 0,
 			y = 0,
 			yaw = 0,
@@ -19,6 +32,47 @@ local function create_default_blackboard()
 		},
 		game = {
 			stage = "UNKNOWN",
+			sync_timestamp = 0,
+
+			outpost_health = 0,
+			base_health = 0,
+
+			hero_health = 0,
+			infantry_1_health = 0,
+			infantry_2_health = 0,
+			engineer_health = 0,
+
+			hero_position = { x = 0.0, y = 0.0 },
+			infantry_1_position = { x = 0.0, y = 0.0 },
+			infantry_2_position = { x = 0.0, y = 0.0 },
+			engineer_position = { x = 0.0, y = 0.0 },
+
+			remaining_time = 0,
+			gold_coin = 0,
+			exchangeable_ammunition_quantity = 0,
+
+			our_dart_number_of_hits = 0,
+			our_dart_nmber_of_hits = 0,
+			fortress_occupied = false,
+			big_energy_mechanism_activated = false,
+			small_energy_mechanism_activated = false,
+			robot_id = 0,
+			can_confirm_free_revive = false,
+			can_exchange_instant_revive = false,
+			instant_revive_cost = 0,
+			exchanged_bullet = 0,
+			remote_bullet_exchange_count = 0,
+			sentry_mode = 0,
+			target_mode = 3,
+			energy_mechanism_activatable = false,
+		},
+		map_command = {
+			x = 0,
+			y = 0,
+			keyboard = 0,
+			target_robot_id = 0,
+			source = 0,
+			sequence = 0,
 		},
 		play = {
 			rswitch = "UNKNOWN",
@@ -26,6 +80,8 @@ local function create_default_blackboard()
 		},
 		meta = {
 			timestamp = 0, -- 秒
+			fsm_state = "unknown",
+			fsm_return_stage = "before_fluctuant",
 		},
 
 		-- Static Information
@@ -34,10 +90,20 @@ local function create_default_blackboard()
 
 			-- 状态类规则
 
-			health_limit = 0,
-			health_ready = 0,
+			health_limit = 30,
+			health_ready = 400,
 			bullet_limit = 0,
 			bullet_ready = 0,
+
+			time_of_the_competition_red_line = 90,
+			exchangeable_ammunition_quantity_red_line = 1000,
+			gold_coin_red_line = 400,
+			outpost_health_red_line = 1500,
+			base_health_red_line = 2000,
+			hero_health_ready_red_line = 50,
+			infantry_1_health_ready_red_line = 50,
+			infantry_2_health_ready_red_line = 50,
+			engineer_health_ready_red_line = 50,
 
 			-- 坐标类规则
 			-- 定义顺序：ours = 0，them = 1

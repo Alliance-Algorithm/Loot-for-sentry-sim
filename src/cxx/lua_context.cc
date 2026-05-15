@@ -42,6 +42,10 @@ struct LuaContext::Impl {
 
         auto relocalize_status = std::move(api_impl.relocalize_status);
 
+        api.set_function("exchange_17mm_bullet", std::move(api_impl.exchange_17mm_bullet));
+        api.set_function("switch_mode", std::move(api_impl.switch_mode));
+        api.set_function("confirm_revive", std::move(api_impl.confirm_revive));
+
         api.set_function(
             "info", [this](const std::string& text) { logging.info("Lua: {}", text); });
         api.set_function(

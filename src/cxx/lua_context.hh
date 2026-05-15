@@ -27,6 +27,9 @@ public:
         std::function<bool(double, double, double)> relocalize_local;
         std::function<bool(double, double, double)> relocalize_wide;
         std::function<RelocalizeStatus()> relocalize_status;
+        std::function<void(int)> exchange_17mm_bullet;
+        std::function<void(int)> switch_mode;
+        std::function<void()> confirm_revive;
     };
 
     explicit LuaContext(rclcpp::Node& node) noexcept;

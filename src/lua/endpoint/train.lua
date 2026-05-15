@@ -110,30 +110,32 @@ on_init = function()
 				use_sim_time = false,
 				launch_relocation = true
 			})
-			request:sleep(10)
+			request:sleep(5)
 
-			local max_retries = 3
-			local reloc_ok = false
-			for attempt = 1, max_retries do
-				action:info(string.format(
-					"[RELOC] 第 %d/%d 次 initial 重定位...", attempt, max_retries))
-				local ok, st = action:relocalize_initial(0, 0, 0, 20)
-				if ok then
-					reloc_ok = true
-					break
-				end
-				action:warn(string.format(
-					"[RELOC] 第 %d/%d 次失败: %s", attempt, max_retries,
-					tostring(st and st.message or "unknown")))
-			end
+			-- action:switch_mode(1)
 
-			if not reloc_ok then
-				action:fuck("[RELOC] 3 次 initial 重定位全部失败，取消出区")
-				return
-			end
+			-- local max_retries = 3
+			-- local reloc_ok = false
+			-- for attempt = 1, max_retries do
+			-- 	action:info(string.format(
+			-- 		"[RELOC] 第 %d/%d 次 initial 重定位...", attempt, max_retries))
+			-- 	local ok, st = action:relocalize_initial(0, 0, 0, 20)
+			-- 	if ok then
+			-- 		reloc_ok = true
+			-- 		break
+			-- 	end
+			-- 	action:warn(string.format(
+			-- 		"[RELOC] 第 %d/%d 次失败: %s", attempt, max_retries,
+			-- 		tostring(st and st.message or "unknown")))
+			-- end
 
-			action:info("[ORDER] 重定位成功，启动出区")
-			intent_fsm:start_on(Intent.getout)
+			-- if not reloc_ok then
+			-- 	action:fuck("[RELOC] 3 次 initial 重定位全部失败，取消出区")
+			-- 	return
+			-- end
+
+			-- action:info("[ORDER] 重定位成功，启动出区")
+			-- intent_fsm:start_on(Intent.getout)
 		end)
 
 		while true do
@@ -162,6 +164,9 @@ on_init = function()
 		while true do
 			action:switch_navigation(blackboard.play.rswitch == "UP")
 			request:yield()
+			if blackboard.game.can_confirm_free_revive then
+				action:confirm_revive()
+			end
 		end
 	end)
 
@@ -195,24 +200,55 @@ on_init = function()
 			if cur.health_ready and not prev.health_ready then
 				action:info("[EDGE] 血量已恢复")
 				intent_fsm:start_on(Intent.cruise)
+				if blackboard.user.auto_aim_should_control then
+					action:info("[EDGE] 进入巡航时自瞄已锁定，直接追击")
+					intent_fsm:start_on(Intent.chase)
+				end
 			end
-			if cur.bullet_ready and not prev.bullet_ready then
-				action:info("[EDGE] 弹药已补充")
-				intent_fsm:start_on(Intent.cruise)
-			end
+			-- if cur.bullet_ready and not prev.bullet_ready then
+			-- 	action:info("[EDGE] 弹药已补充")
+			-- 	intent_fsm:start_on(Intent.cruise)
+			-- 	if blackboard.user.auto_aim_should_control then
+			-- 		action:info("[EDGE] 进入巡航时自瞄已锁定，直接追击")
+			-- 		intent_fsm:start_on(Intent.chase)
+			-- 	end
+			-- end
 
 			if cur.auto_aim and not prev.auto_aim then
+				-- if intent_fsm.details.current_state == Intent.cruise then
 				action:info("[EDGE] 自瞄锁定目标，进入追击")
 				intent_fsm:start_on(Intent.chase)
+				-- end
 			end
 			if not cur.auto_aim and prev.auto_aim then
-				action:info("[EDGE] 自瞄丢失目标，返回巡航")
-				intent_fsm:start_on(Intent.cruise)
+				if intent_fsm.details.current_state == Intent.chase then
+					action:info("[EDGE] 自瞄丢失目标，返回巡航")
+					intent_fsm:start_on(Intent.cruise)
+				end
 			end
 
 			prev = cur
 			intent_fsm:spin_once()
 			request:yield()
+		end
+	end)
+
+	scheduler:append_task(function()
+		while true do
+			local current = blackboard.game.sentry_mode
+			local target = blackboard.game.target_mode
+
+			if target ~= 0 and current ~= target then
+				action:warn("[SENTRY] 模式不匹配: " .. current .. " → " .. target)
+				action:switch_mode(target)
+			end
+			request:yield()
+		end
+	end)
+	scheduler:append_task(function()
+		while true do
+			request:sleep(1)
+			action:info("[SENTRY] mode: " .. blackboard.game.sentry_mode)
 		end
 	end)
 end

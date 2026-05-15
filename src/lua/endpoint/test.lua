@@ -37,7 +37,19 @@ on_init = function()
 				launch_odin1 = false,
 				use_sim_time = false,
 			}
+			request:sleep(6)
+			action:switch_mode(1)
+
+			request:sleep(6)
+			action:switch_mode(2)
+			request:sleep(6)
+			action:switch_mode(1)
+
+			request:sleep(6)
+			action:switch_mode(2)
+			action:info("hh")
 		end)
+
 
 		while true do
 			switch_order:spin()
@@ -51,6 +63,12 @@ on_init = function()
 		while true do
 			action:switch_navigation(blackboard.play.rswitch == "UP")
 			request:yield()
+		end
+	end)
+	scheduler:append_task(function()
+		while true do
+			request:sleep(1)
+			action:info("[SENTRY] mode: " .. blackboard.game.sentry_mode)
 		end
 	end)
 end

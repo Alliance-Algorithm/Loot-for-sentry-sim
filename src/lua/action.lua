@@ -168,6 +168,26 @@ function action:relocalize_status()
 	return api.relocalize_status()
 end
 
+function action:exchange_17mm_bullet(amount)
+	amount = blackboard.game.exchanged_bullet + amount
+	api.exchange_17mm_bullet(amount)
+end
+
+local last_switch_sent = -5
+
+function action:switch_mode(mode)
+	local now = clock:now()
+	if now - last_switch_sent < 5.0 then
+		return
+	end
+	last_switch_sent = now
+	api.switch_mode(mode)
+end
+
+function action:confirm_revive()
+	api.confirm_revive()
+end
+
 --- @param position {x: number, y: number}
 function action:navigate(position)
 	local x = position.x

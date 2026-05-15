@@ -24,6 +24,7 @@ function M.enter()
 	index = 1
 	action:info(string.format("[GETOUT] 开始出区导航，共 %d 个路径点", #waypoints))
 	action:navigate(waypoints[1])
+	-- action:switch_mode(3)
 end
 
 function M.event(handle)
