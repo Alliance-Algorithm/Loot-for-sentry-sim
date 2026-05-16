@@ -6,6 +6,7 @@
 local Scheduler = require("util.scheduler")
 local scheduler = Scheduler.new()
 local request = Scheduler.request
+local fsm = require("util.fsm")
 
 local action = require("action")
 local blackboard = require("blackboard").singleton()
@@ -50,6 +51,43 @@ function M.event(handle)
 	handle:set_next("cruise")
 	-- action:switch_mode(2)
 	blackboard.game.target_mode = 2
+end
+
+function M.new()
+	local driver = {
+		phase_fsm = fsm:new("patrol"),
+	}
+
+	driver.phase_fsm:use {
+		state = "patrol",
+		event = function(handle)
+			local condition = blackboard.condition
+			blackboard.game.target_mode = 2
+			local wp = patrol_points[current_target]
+			if condition.near(wp, 0.3) then
+				request:sleep(1)
+				current_target = current_target % #patrol_points + 1
+			else
+				request:sleep(1)
+			end
+			handle:set_next("patrol")
+		end,
+	}
+
+	function driver:enter()
+		self.phase_fsm:start_on("patrol")
+		M.enter()
+	end
+
+	function driver:spin_once()
+		self.phase_fsm:spin_once()
+	end
+
+	function driver:phase()
+		return self.phase_fsm.details.current_state
+	end
+
+	return driver
 end
 
 return M

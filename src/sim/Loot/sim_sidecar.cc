@@ -1146,9 +1146,39 @@ public:
         if (state.user.gold) {
             user["gold"] = *state.user.gold;
         }
+        if (state.user.chassis_power) {
+            user["chassis_power"] = *state.user.chassis_power;
+        }
+        if (state.user.chassis_buffer_energy) {
+            user["chassis_buffer_energy"] = *state.user.chassis_buffer_energy;
+        }
+        if (state.user.chassis_output_status) {
+            user["chassis_output_status"] = *state.user.chassis_output_status;
+        }
+        if (state.user.shooter_cooling) {
+            user["shooter_cooling"] = *state.user.shooter_cooling;
+        }
+        if (state.user.shooter_heat_limit) {
+            user["shooter_heat_limit"] = *state.user.shooter_heat_limit;
+        }
+        if (state.user.bullet_42mm) {
+            user["bullet_42mm"] = *state.user.bullet_42mm;
+        }
+        if (state.user.fortress_17mm_bullet) {
+            user["fortress_17mm_bullet"] = *state.user.fortress_17mm_bullet;
+        }
+        if (state.user.initial_speed) {
+            user["initial_speed"] = *state.user.initial_speed;
+        }
+        if (state.user.shoot_timestamp) {
+            user["shoot_timestamp"] = *state.user.shoot_timestamp;
+        }
         user["auto_aim_should_control"] = state.user.auto_aim_should_control;
 
         auto game = blackboard["game"].get<sol::table>();
+        if (state.game.sync_timestamp) {
+            game["sync_timestamp"] = *state.game.sync_timestamp;
+        }
         if (state.game.base_health) {
             game["base_health"] = *state.game.base_health;
         }
@@ -1157,6 +1187,18 @@ public:
         }
         if (state.game.gold_coin) {
             game["gold_coin"] = *state.game.gold_coin;
+        }
+        if (state.game.hero_health) {
+            game["hero_health"] = *state.game.hero_health;
+        }
+        if (state.game.infantry_1_health) {
+            game["infantry_1_health"] = *state.game.infantry_1_health;
+        }
+        if (state.game.infantry_2_health) {
+            game["infantry_2_health"] = *state.game.infantry_2_health;
+        }
+        if (state.game.engineer_health) {
+            game["engineer_health"] = *state.game.engineer_health;
         }
         if (state.game.remaining_time) {
             game["remaining_time"] = *state.game.remaining_time;
@@ -1179,15 +1221,51 @@ public:
         if (state.game.stage) {
             game["stage"] = *state.game.stage;
         }
+        if (state.game.robot_id) {
+            game["robot_id"] = *state.game.robot_id;
+        }
         if (state.game.can_confirm_free_revive) {
             game["can_confirm_free_revive"] = *state.game.can_confirm_free_revive;
+        }
+        if (state.game.can_exchange_instant_revive) {
+            game["can_exchange_instant_revive"] = *state.game.can_exchange_instant_revive;
+        }
+        if (state.game.instant_revive_cost) {
+            game["instant_revive_cost"] = *state.game.instant_revive_cost;
         }
         if (state.game.exchanged_bullet) {
             game["exchanged_bullet"] = *state.game.exchanged_bullet;
         }
+        if (state.game.remote_bullet_exchange_count) {
+            game["remote_bullet_exchange_count"] = *state.game.remote_bullet_exchange_count;
+        }
         if (state.game.sentry_mode) {
             game["sentry_mode"] = *state.game.sentry_mode;
         }
+        if (state.game.energy_mechanism_activatable) {
+            game["energy_mechanism_activatable"] = *state.game.energy_mechanism_activatable;
+        }
+        auto set_position = [](sol::table position, const std::optional<double>& px,
+                               const std::optional<double>& py) {
+            if (px) {
+                position["x"] = *px;
+            }
+            if (py) {
+                position["y"] = *py;
+            }
+        };
+        set_position(
+            game["hero_position"].get<sol::table>(), state.game.hero_position_x,
+            state.game.hero_position_y);
+        set_position(
+            game["infantry_1_position"].get<sol::table>(), state.game.infantry_1_position_x,
+            state.game.infantry_1_position_y);
+        set_position(
+            game["infantry_2_position"].get<sol::table>(), state.game.infantry_2_position_x,
+            state.game.infantry_2_position_y);
+        set_position(
+            game["engineer_position"].get<sol::table>(), state.game.engineer_position_x,
+            state.game.engineer_position_y);
 
         auto play = blackboard["play"].get<sol::table>();
         if (state.play.rswitch) {
@@ -1199,6 +1277,26 @@ public:
 
         auto meta = blackboard["meta"].get<sol::table>();
         meta["timestamp"] = state.meta.timestamp;
+
+        auto map_command = blackboard["map_command"].get<sol::table>();
+        if (state.map_command.x) {
+            map_command["x"] = *state.map_command.x;
+        }
+        if (state.map_command.y) {
+            map_command["y"] = *state.map_command.y;
+        }
+        if (state.map_command.keyboard) {
+            map_command["keyboard"] = *state.map_command.keyboard;
+        }
+        if (state.map_command.target_robot_id) {
+            map_command["target_robot_id"] = *state.map_command.target_robot_id;
+        }
+        if (state.map_command.source) {
+            map_command["source"] = *state.map_command.source;
+        }
+        if (state.map_command.sequence) {
+            map_command["sequence"] = *state.map_command.sequence;
+        }
     }
 
     /**
@@ -1474,6 +1572,33 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
         if (user["gold"] && !user["gold"].IsNull()) {
             state.user.gold = parse_double(user["gold"]);
         }
+        if (user["chassis_power"] && !user["chassis_power"].IsNull()) {
+            state.user.chassis_power = parse_double(user["chassis_power"]);
+        }
+        if (user["chassis_buffer_energy"] && !user["chassis_buffer_energy"].IsNull()) {
+            state.user.chassis_buffer_energy = parse_double(user["chassis_buffer_energy"]);
+        }
+        if (user["chassis_output_status"] && !user["chassis_output_status"].IsNull()) {
+            state.user.chassis_output_status = parse_boolean(user["chassis_output_status"]);
+        }
+        if (user["shooter_cooling"] && !user["shooter_cooling"].IsNull()) {
+            state.user.shooter_cooling = parse_double(user["shooter_cooling"]);
+        }
+        if (user["shooter_heat_limit"] && !user["shooter_heat_limit"].IsNull()) {
+            state.user.shooter_heat_limit = parse_double(user["shooter_heat_limit"]);
+        }
+        if (user["bullet_42mm"] && !user["bullet_42mm"].IsNull()) {
+            state.user.bullet_42mm = parse_double(user["bullet_42mm"]);
+        }
+        if (user["fortress_17mm_bullet"] && !user["fortress_17mm_bullet"].IsNull()) {
+            state.user.fortress_17mm_bullet = parse_double(user["fortress_17mm_bullet"]);
+        }
+        if (user["initial_speed"] && !user["initial_speed"].IsNull()) {
+            state.user.initial_speed = parse_double(user["initial_speed"]);
+        }
+        if (user["shoot_timestamp"] && !user["shoot_timestamp"].IsNull()) {
+            state.user.shoot_timestamp = parse_double(user["shoot_timestamp"]);
+        }
         if (user["auto_aim_should_control"] && !user["auto_aim_should_control"].IsNull()) {
             state.user.auto_aim_should_control = parse_boolean(user["auto_aim_should_control"]);
         }
@@ -1481,6 +1606,9 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
 
     auto game = root["game"];
     if (game && game.IsMap()) {
+        if (game["sync_timestamp"] && !game["sync_timestamp"].IsNull()) {
+            state.game.sync_timestamp = parse_double(game["sync_timestamp"]);
+        }
         if (game["base_health"] && !game["base_health"].IsNull()) {
             state.game.base_health = parse_double(game["base_health"]);
         }
@@ -1489,6 +1617,42 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
         }
         if (game["gold_coin"] && !game["gold_coin"].IsNull()) {
             state.game.gold_coin = parse_double(game["gold_coin"]);
+        }
+        if (game["hero_health"] && !game["hero_health"].IsNull()) {
+            state.game.hero_health = parse_double(game["hero_health"]);
+        }
+        if (game["infantry_1_health"] && !game["infantry_1_health"].IsNull()) {
+            state.game.infantry_1_health = parse_double(game["infantry_1_health"]);
+        }
+        if (game["infantry_2_health"] && !game["infantry_2_health"].IsNull()) {
+            state.game.infantry_2_health = parse_double(game["infantry_2_health"]);
+        }
+        if (game["engineer_health"] && !game["engineer_health"].IsNull()) {
+            state.game.engineer_health = parse_double(game["engineer_health"]);
+        }
+        if (game["hero_position_x"] && !game["hero_position_x"].IsNull()) {
+            state.game.hero_position_x = parse_double(game["hero_position_x"]);
+        }
+        if (game["hero_position_y"] && !game["hero_position_y"].IsNull()) {
+            state.game.hero_position_y = parse_double(game["hero_position_y"]);
+        }
+        if (game["infantry_1_position_x"] && !game["infantry_1_position_x"].IsNull()) {
+            state.game.infantry_1_position_x = parse_double(game["infantry_1_position_x"]);
+        }
+        if (game["infantry_1_position_y"] && !game["infantry_1_position_y"].IsNull()) {
+            state.game.infantry_1_position_y = parse_double(game["infantry_1_position_y"]);
+        }
+        if (game["infantry_2_position_x"] && !game["infantry_2_position_x"].IsNull()) {
+            state.game.infantry_2_position_x = parse_double(game["infantry_2_position_x"]);
+        }
+        if (game["infantry_2_position_y"] && !game["infantry_2_position_y"].IsNull()) {
+            state.game.infantry_2_position_y = parse_double(game["infantry_2_position_y"]);
+        }
+        if (game["engineer_position_x"] && !game["engineer_position_x"].IsNull()) {
+            state.game.engineer_position_x = parse_double(game["engineer_position_x"]);
+        }
+        if (game["engineer_position_y"] && !game["engineer_position_y"].IsNull()) {
+            state.game.engineer_position_y = parse_double(game["engineer_position_y"]);
         }
         if (game["remaining_time"] && !game["remaining_time"].IsNull()) {
             state.game.remaining_time = parse_double(game["remaining_time"]);
@@ -1517,14 +1681,35 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
         if (game["stage"] && !game["stage"].IsNull()) {
             state.game.stage = parse_string(game["stage"]);
         }
+        if (game["robot_id"] && !game["robot_id"].IsNull()) {
+            state.game.robot_id = parse_double(game["robot_id"]);
+        }
         if (game["can_confirm_free_revive"] && !game["can_confirm_free_revive"].IsNull()) {
             state.game.can_confirm_free_revive = parse_boolean(game["can_confirm_free_revive"]);
+        }
+        if (game["can_exchange_instant_revive"]
+            && !game["can_exchange_instant_revive"].IsNull()) {
+            state.game.can_exchange_instant_revive =
+                parse_boolean(game["can_exchange_instant_revive"]);
+        }
+        if (game["instant_revive_cost"] && !game["instant_revive_cost"].IsNull()) {
+            state.game.instant_revive_cost = parse_double(game["instant_revive_cost"]);
         }
         if (game["exchanged_bullet"] && !game["exchanged_bullet"].IsNull()) {
             state.game.exchanged_bullet = parse_double(game["exchanged_bullet"]);
         }
+        if (game["remote_bullet_exchange_count"]
+            && !game["remote_bullet_exchange_count"].IsNull()) {
+            state.game.remote_bullet_exchange_count =
+                parse_double(game["remote_bullet_exchange_count"]);
+        }
         if (game["sentry_mode"] && !game["sentry_mode"].IsNull()) {
             state.game.sentry_mode = parse_double(game["sentry_mode"]);
+        }
+        if (game["energy_mechanism_activatable"]
+            && !game["energy_mechanism_activatable"].IsNull()) {
+            state.game.energy_mechanism_activatable =
+                parse_boolean(game["energy_mechanism_activatable"]);
         }
     }
 
@@ -1543,6 +1728,28 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
         assign_if_present<double>(
             meta, "timestamp", state.meta.timestamp,
             [](const YAML::Node& node) { return parse_double(node); });
+    }
+
+    auto map_command = root["map_command"];
+    if (map_command && map_command.IsMap()) {
+        if (map_command["x"] && !map_command["x"].IsNull()) {
+            state.map_command.x = parse_double(map_command["x"]);
+        }
+        if (map_command["y"] && !map_command["y"].IsNull()) {
+            state.map_command.y = parse_double(map_command["y"]);
+        }
+        if (map_command["keyboard"] && !map_command["keyboard"].IsNull()) {
+            state.map_command.keyboard = parse_double(map_command["keyboard"]);
+        }
+        if (map_command["target_robot_id"] && !map_command["target_robot_id"].IsNull()) {
+            state.map_command.target_robot_id = parse_double(map_command["target_robot_id"]);
+        }
+        if (map_command["source"] && !map_command["source"].IsNull()) {
+            state.map_command.source = parse_double(map_command["source"]);
+        }
+        if (map_command["sequence"] && !map_command["sequence"].IsNull()) {
+            state.map_command.sequence = parse_double(map_command["sequence"]);
+        }
     }
 }
 
@@ -1576,11 +1783,25 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
     auto user = patch["user"];
     if (user && user.IsMap()) {
         auto filtered_user = YAML::Node{YAML::NodeType::Map};
-        if (user["health"]) {
-            filtered_user["health"] = user["health"];
-        }
-        if (user["bullet"]) {
-            filtered_user["bullet"] = user["bullet"];
+        constexpr std::array<std::string_view, 13> user_fields = {
+            "health",
+            "bullet",
+            "gold",
+            "chassis_power_limit",
+            "chassis_power",
+            "chassis_buffer_energy",
+            "chassis_output_status",
+            "shooter_cooling",
+            "shooter_heat_limit",
+            "bullet_42mm",
+            "fortress_17mm_bullet",
+            "initial_speed",
+            "shoot_timestamp",
+        };
+        for (const auto field : user_fields) {
+            if (user[std::string{field}]) {
+                filtered_user[std::string{field}] = user[std::string{field}];
+            }
         }
         if (has_entries(filtered_user)) {
             result["user"] = filtered_user;
@@ -1590,20 +1811,54 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
     auto game = patch["game"];
     if (game && game.IsMap()) {
         auto filtered_game = YAML::Node{YAML::NodeType::Map};
-        if (game["stage"])
-            filtered_game["stage"] = game["stage"];
-        if (game["remaining_time"])
-            filtered_game["remaining_time"] = game["remaining_time"];
-        if (game["our_dart_nmber_of_hits"])
-            filtered_game["our_dart_nmber_of_hits"] = game["our_dart_nmber_of_hits"];
-        if (game["fortress_occupied"])
-            filtered_game["fortress_occupied"] = game["fortress_occupied"];
-        if (game["big_energy_mechanism_activated"])
-            filtered_game["big_energy_mechanism_activated"] =
-                game["big_energy_mechanism_activated"];
-        if (game["small_energy_mechanism_activated"])
-            filtered_game["small_energy_mechanism_activated"] =
-                game["small_energy_mechanism_activated"];
+        constexpr std::array<std::string_view, 24> game_fields = {
+            "stage",
+            "sync_timestamp",
+            "base_health",
+            "outpost_health",
+            "gold_coin",
+            "hero_health",
+            "infantry_1_health",
+            "infantry_2_health",
+            "engineer_health",
+            "hero_position_x",
+            "hero_position_y",
+            "infantry_1_position_x",
+            "infantry_1_position_y",
+            "infantry_2_position_x",
+            "infantry_2_position_y",
+            "engineer_position_x",
+            "engineer_position_y",
+            "remaining_time",
+            "exchangeable_ammunition_quantity",
+            "our_dart_nmber_of_hits",
+            "fortress_occupied",
+            "big_energy_mechanism_activated",
+            "small_energy_mechanism_activated",
+            "robot_id",
+        };
+        for (const auto field : game_fields) {
+            if (game[std::string{field}]) {
+                filtered_game[std::string{field}] = game[std::string{field}];
+            }
+        }
+        constexpr std::array<std::string_view, 6> game_control_fields = {
+            "can_confirm_free_revive",
+            "can_exchange_instant_revive",
+            "instant_revive_cost",
+            "exchanged_bullet",
+            "remote_bullet_exchange_count",
+            "sentry_mode",
+        };
+        for (const auto field : game_control_fields) {
+            if (game[std::string{field}]) {
+                filtered_game[std::string{field}] = game[std::string{field}];
+            }
+        }
+        if (game["energy_mechanism_activatable"]) {
+            filtered_game["energy_mechanism_activatable"] =
+                game["energy_mechanism_activatable"];
+        }
         if (has_entries(filtered_game))
             result["game"] = filtered_game;
     }
@@ -1619,6 +1874,27 @@ auto update_state_from_payload(const YAML::Node& root, SimState& state) -> void 
         }
         if (has_entries(filtered_play)) {
             result["play"] = filtered_play;
+        }
+    }
+
+    auto map_command = patch["map_command"];
+    if (map_command && map_command.IsMap()) {
+        auto filtered_map_command = YAML::Node{YAML::NodeType::Map};
+        constexpr std::array<std::string_view, 6> map_command_fields = {
+            "x",
+            "y",
+            "keyboard",
+            "target_robot_id",
+            "source",
+            "sequence",
+        };
+        for (const auto field : map_command_fields) {
+            if (map_command[std::string{field}]) {
+                filtered_map_command[std::string{field}] = map_command[std::string{field}];
+            }
+        }
+        if (has_entries(filtered_map_command)) {
+            result["map_command"] = filtered_map_command;
         }
     }
 

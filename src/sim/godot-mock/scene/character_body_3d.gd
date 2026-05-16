@@ -128,6 +128,7 @@ var health_bar_fill: MeshInstance3D = null
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var chassis_node: Node3D = $chassis
+@onready var gimbal_node: Node3D = $gimbal
 @onready var gimbal_top_yaw: Node3D = $gimbal/top_yaw
 @onready var shooter_node: Node3D = $gimbal/top_yaw/shooter
 @onready var shield_fx: MeshInstance3D = $ShieldFX
@@ -394,7 +395,7 @@ func _tick_scan_mode(delta: float) -> void:
 	current_scan_speed = move_toward(
 		current_scan_speed, gimbal_scan_speed_max, gimbal_scan_accel * delta
 	)
-	gimbal_top_yaw.rotate_y(current_scan_speed * delta)
+	gimbal_node.rotate_y(current_scan_speed * delta)
 	_update_scan_ray_visual(true)
 
 
@@ -437,7 +438,7 @@ func _track_enemy(delta: float) -> bool:
 	var target_dir := to_target.normalized()
 	var angle_error := atan2(forward.cross(target_dir).y, forward.dot(target_dir))
 	var step : float = clamp(angle_error, -gimbal_track_turn_rate * delta, gimbal_track_turn_rate * delta)
-	gimbal_top_yaw.rotate_y(step)
+	gimbal_node.rotate_y(step)
 
 	return absf(angle_error) <= 0.08
 

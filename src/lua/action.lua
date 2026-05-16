@@ -93,6 +93,10 @@ function action:switch_controller(mode)
 	api.switch_controller(mode)
 end
 
+function action:update_controller(mode)
+	self:switch_controller(mode)
+end
+
 function action:update_chassis_mode(mode)
 	api.update_chassis_mode(mode)
 end
@@ -192,6 +196,13 @@ function action:navigate(position)
 	end
 
 	self.target = position
+end
+
+function action:clear_target()
+	self.target = {
+		x = NaN,
+		y = NaN,
+	}
 end
 
 return action
