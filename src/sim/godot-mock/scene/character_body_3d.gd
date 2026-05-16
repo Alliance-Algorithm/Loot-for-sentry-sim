@@ -72,8 +72,14 @@ const ARMOR_NODE_PATHS := [
 var gravity :float = ProjectSettings.get_setting("physics/3d/default_gravity")
 ## 底盘行为模式: "idle" 静止 / "spin" 自旋。
 var chassis_mode := "idle"
+## 当前控制器模式: "normal"/"road"/"step"/"slope"。
+var controller_mode := "normal"
 ## 云台控制来源: "manual" 手动 / "scan" 扫描 / "auto" 自动瞄准。
 var gimbal_dominator := "manual"
+## 导航控制是否允许生效。
+var navigation_enabled := true
+## 自瞄命令是否允许生效。
+var autoaim_enabled := false
 ## 外部速度超控向量 (X=前, Y=右)，由 Lua 遥控指令设置。
 var external_chassis_vel := Vector2.ZERO
 ## 外部速度超控的剩余有效期 (s)。
@@ -86,6 +92,16 @@ var fire_cooldown_left := 0.0
 var hp := max_health
 var bullet := spawn_bullet
 var gold := spawn_gold
+var chassis_power_limit := 100.0
+var chassis_power := 0.0
+var chassis_buffer_energy := 0.0
+var chassis_output_status := false
+var shooter_cooling := 0.0
+var shooter_heat_limit := 0.0
+var bullet_42mm := 0
+var fortress_17mm_bullet := 0
+var initial_speed := 0.0
+var shoot_timestamp := 0.0
 var is_dead := false
 var dead_left := 0.0
 var respawn_shield_left := 0.0
@@ -172,11 +188,32 @@ func set_chassis_mode(mode: String) -> void:
 	chassis_mode = mode
 
 
+func set_controller_mode(mode: String) -> void:
+	if is_dead:
+		return
+	controller_mode = mode
+
+
+func set_navigation_enabled(enabled: bool) -> void:
+	navigation_enabled = enabled
+	if not enabled:
+		external_chassis_vel = Vector2.ZERO
+		external_chassis_vel_ttl = 0.0
+
+
 ## 设置云台控制源 ("manual"/"scan"/"auto")，由 Lua 控制指令调用。
 func set_gimbal_dominator(dominator_name: String) -> void:
 	if is_dead:
 		return
 	gimbal_dominator = dominator_name
+
+
+func set_autoaim_enabled(enabled: bool) -> void:
+	autoaim_enabled = enabled
+	if enabled and gimbal_dominator != "auto":
+		gimbal_dominator = "auto"
+	elif not enabled and gimbal_dominator == "auto":
+		gimbal_dominator = "scan"
 
 
 ## 手动设置云台 yaw 角度，仅在 gimbal_dominator == "manual" 时生效。
@@ -200,8 +237,18 @@ func get_sim_resource_state() -> Dictionary:
 		"health": hp,
 		"bullet": bullet,
 		"gold": gold,
+		"chassis_power_limit": chassis_power_limit,
+		"chassis_power": chassis_power,
+		"chassis_buffer_energy": chassis_buffer_energy,
+		"chassis_output_status": chassis_output_status,
+		"shooter_cooling": shooter_cooling,
+		"shooter_heat_limit": shooter_heat_limit,
+		"bullet_42mm": bullet_42mm,
+		"fortress_17mm_bullet": fortress_17mm_bullet,
+		"initial_speed": initial_speed,
+		"shoot_timestamp": shoot_timestamp,
 		"dead": is_dead,
-		"auto_aim_should_control": gimbal_dominator == "auto",
+		"auto_aim_should_control": autoaim_enabled and gimbal_dominator == "auto",
 	}
 
 
@@ -218,6 +265,21 @@ func sync_resources_from_blackboard(
 	if gold_value != null:
 		gold = maxi(0, int(round(float(gold_value))))
 	_update_health_bar()
+
+
+func sync_runtime_state(runtime_user: Dictionary) -> void:
+	chassis_power_limit = float(runtime_user.get("chassis_power_limit", chassis_power_limit))
+	chassis_power = float(runtime_user.get("chassis_power", chassis_power))
+	chassis_buffer_energy = float(runtime_user.get("chassis_buffer_energy", chassis_buffer_energy))
+	chassis_output_status = bool(runtime_user.get("chassis_output_status", chassis_output_status))
+	shooter_cooling = float(runtime_user.get("shooter_cooling", shooter_cooling))
+	shooter_heat_limit = float(runtime_user.get("shooter_heat_limit", shooter_heat_limit))
+	bullet_42mm = int(round(float(runtime_user.get("bullet_42mm", bullet_42mm))))
+	fortress_17mm_bullet = int(round(float(
+		runtime_user.get("fortress_17mm_bullet", fortress_17mm_bullet)
+	)))
+	initial_speed = float(runtime_user.get("initial_speed", initial_speed))
+	shoot_timestamp = float(runtime_user.get("shoot_timestamp", shoot_timestamp))
 
 
 ## 受到子弹伤害，血量归零时进入死亡状态。
@@ -248,10 +310,20 @@ func get_armor_target_nodes() -> Array[Node3D]:
 	return result
 
 func _compute_desired_planar_velocity() -> Vector3:
+	if not navigation_enabled:
+		return Vector3.ZERO
 
 	if external_chassis_vel_ttl > 0.0:
-
-		return Vector3(external_chassis_vel.x, 0.0, external_chassis_vel.y)
+		var velocity_scale := 1.0
+		if controller_mode == "road":
+			velocity_scale = 1.15
+		elif controller_mode == "step":
+			velocity_scale = 0.75
+		elif controller_mode == "slope":
+			velocity_scale = 0.60
+		return Vector3(
+			external_chassis_vel.x * velocity_scale, 0.0, external_chassis_vel.y * velocity_scale
+		)
 
 
 	if target_node:
@@ -327,6 +399,9 @@ func _tick_scan_mode(delta: float) -> void:
 
 
 func _tick_auto_mode(delta: float) -> void:
+	if not autoaim_enabled:
+		_tick_scan_mode(delta)
+		return
 	current_scan_speed = move_toward(current_scan_speed, 0.0, gimbal_scan_accel * delta)
 	var lock := _track_enemy(delta)
 	_update_scan_ray_visual(false)

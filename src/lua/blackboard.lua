@@ -15,7 +15,7 @@ local function create_default_blackboard()
 			bullet = 100,
 			chassis_power_limit = 100,
 
-			chassis_power = 0,
+			chassis_power = 100,
 			chassis_buffer_energy = 0,
 			chassis_output_status = false,
 			shooter_cooling = 0,
@@ -34,8 +34,8 @@ local function create_default_blackboard()
 			stage = "UNKNOWN",
 			sync_timestamp = 0,
 
-			outpost_health = 0,
-			base_health = 0,
+			outpost_health = 1500,
+			base_health = 5000,
 
 			hero_health = 150,
 			infantry_1_health = 150,
@@ -109,34 +109,34 @@ local function create_default_blackboard()
 			-- 定义顺序：ours = 0，them = 1
 
 			-- 普通地形坐标
-			fortress = PointPair { { 0, 0 }, { 0, 0 } },          -- 堡垒
-			resupply_zone = PointPair { { 3.0, 2.0 }, { 26.5, 13.5 } },     -- 补给点
-			road_zone_begin = PointPair { { 8.2, 3.7 }, { 26.5, 12.5 } }, -- 公路区
-			road_zone_way_point_0 = PointPair { { 5.8, 3.6 }, { 0, 0 } },
-			road_zone_way_point_1 = PointPair { { 5.0, 1.8 }, { 0, 0 } }, -- 公路区中途点1
-			road_zone_way_point_2 = PointPair { { 8.5, 1.5 }, { 0, 0 } }, -- 公路区中途点2
-			road_zone_final = PointPair { { 9.5, 1.2 }, { 0, 0 } },
-			road_zone_final0 = PointPair { { 5.7, -2.6 }, { 0, 0 } },
-			launch_ramp_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 飞坡
-			launch_ramp_final = PointPair { { 0, 0 }, { 0, 0 } },
-			outpost_resupply = PointPair { { 0, 0 }, { 0, 0 } }, -- 前哨站补给点
-			assembly_zone = PointPair { { 0, 0 }, { 0, 0 } },
+			fortress = PointPair { { 7.2, 8.1 }, { 22.8, 7.9 } },          -- 堡垒
+			resupply_zone = PointPair { { 3.0, 2.0 }, { 26.0, 14.0 } },     -- 补给点
+			road_zone_begin = PointPair { { 8.2, 3.7 }, { 20.8, 12.3 } }, -- 公路区
+			road_zone_way_point_0 = PointPair { { 6.7, 3.5 }, { 22.3, 12.5 } },
+			road_zone_way_point_1 = PointPair { { 5.2, 3.5 }, { 24.8, 12.5 } }, -- 公路区中途点1
+			road_zone_way_point_2 = PointPair { { 5.2, 1.4 }, { 24.8, 14.6 } }, -- 公路区中途点2
+			road_zone_final = PointPair { { 11.0, 1.4 }, { 18.0, 14.6 } },
+			road_zone_final0 = PointPair { { 11.0, 1.4 }, { 18.0, 14.6 } },
+			launch_ramp_begin = PointPair { { 12.7, 1.1 }, { 16.3, 14.9 } }, -- 飞坡
+			launch_ramp_final = PointPair { { 15.5, 1.1 }, { 13.5, 14.9 } },
+			outpost_resupply = PointPair { { 12.0, 4.3 }, { 17.0, 11.7 } }, -- 前哨站补给点
+			assembly_zone = PointPair { { 13.5, 8.7 }, { 15.5, 7.3 } },
 
 			-- 中心高地巡航点（非 PointPair，单点）
-			center_highland_point1 = { x = 5.9, y = 0.6 },
-			center_highland_point2 = { x = 5.8, y = 2.1 },
+			center_highland_point1 = { x = 15.3, y = 12.4 },
+			center_highland_point2 = { x = 13.6, y = 3.5 },
 
 			-- 特殊跨越地形坐标
 			road_tunnel_begin = PointPair { { 0, 0 }, { 0, 0 } },   -- 公路隧道
 			road_tunnel_final = PointPair { { 0, 0 }, { 0, 0 } },
-			one_step_begin = PointPair { { 0, 0 }, { 0, 0 } },      -- 一级台阶
-			one_step_final = PointPair { { 0, 0 }, { 0, 0 } },
+			one_step_begin = PointPair { { 8.7, 2.1 }, { 20.3, 26.9 } },      -- 一级台阶
+			one_step_final = PointPair { { 8.7, 3.4 }, { 20.3, 25.6 } },
 			two_step_begin = PointPair { { 0, 0 }, { 0, 0 } },      -- 二级台阶
 			two_step_final = PointPair { { 0, 0 }, { 0, 0 } },
 			common_elevated_ground_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 普通高地（飞坡起点那个高地）
 			common_elevated_ground_final = PointPair { { 0, 0 }, { 0, 0 } },
-			rough_terrain_begin = PointPair { { 0, 0 }, { 0, 0 } }, -- 起伏路段
-			rough_terrain_final = PointPair { { 1.5, 0 }, { 0, 0 } },
+			rough_terrain_begin = PointPair { { 5.3, 1.6 }, { 23.7, 14.4 } }, -- 起伏路段
+			rough_terrain_final = PointPair { { 8.5, 1.6 }, { 20.7, 14.4 } },
 		},
 	}
 

@@ -50,8 +50,24 @@ const LOOT_FLOW_VIEW_SCRIPT := preload("res://scene/loot_flow_view.gd")
 
 const DEBUG_PANEL_SIZE := Vector2(2000, 1200)
 ## blackboard 面板显示字段。
-const BLACKBOARD_USER_DISPLAY_FIELDS := ["bullet", "gold", "health", "mode", "x", "y", "yaw"]
-const BLACKBOARD_GAME_DISPLAY_FIELDS := ["stage", "remaining_time"]
+const BLACKBOARD_USER_DISPLAY_FIELDS := [
+	"health", "bullet", "gold", "x", "y", "yaw", "auto_aim_should_control",
+	"chassis_power_limit", "chassis_power", "chassis_buffer_energy", "chassis_output_status",
+	"shooter_cooling", "shooter_heat_limit", "bullet_42mm", "fortress_17mm_bullet",
+	"initial_speed", "shoot_timestamp"
+]
+const BLACKBOARD_GAME_DISPLAY_FIELDS := [
+	"stage", "sync_timestamp", "remaining_time", "gold_coin", "base_health", "outpost_health",
+	"hero_health", "infantry_1_health", "infantry_2_health", "engineer_health",
+	"exchangeable_ammunition_quantity", "our_dart_nmber_of_hits", "fortress_occupied",
+	"big_energy_mechanism_activated", "small_energy_mechanism_activated", "robot_id",
+	"can_confirm_free_revive", "can_exchange_instant_revive", "instant_revive_cost",
+	"exchanged_bullet", "remote_bullet_exchange_count", "sentry_mode",
+	"energy_mechanism_activatable"
+]
+const BLACKBOARD_MAP_COMMAND_DISPLAY_FIELDS := [
+	"x", "y", "keyboard", "target_robot_id", "source", "sequence"
+]
 ## 游戏阶段枚举值。
 const STAGE_VALUES := ["UNKNOWN", "NOT_START", "STARTED", "ENDED"]
 ## 拨杆开关枚举值。
@@ -76,6 +92,8 @@ var blackboard: Dictionary = {}
 var decision_state: Dictionary = {}
 ## 最近一次 Loot 语义监控快照。
 var loot_state: Dictionary = {}
+## 最近一次 sidecar 宿主运行时状态。
+var runtime_state: Dictionary = {}
 ## Loot 快照版本号（跟随 blackboard 版本）。
 var loot_rev := -1
 ## blackboard 是否已完成首次接收。
@@ -141,14 +159,42 @@ var edit_box: VBoxContainer
 var hp_spin: SpinBox
 var bullet_spin: SpinBox
 var gold_spin: SpinBox
+var chassis_power_limit_spin: SpinBox
+var chassis_power_spin: SpinBox
+var chassis_buffer_energy_spin: SpinBox
+var shooter_cooling_spin: SpinBox
+var shooter_heat_limit_spin: SpinBox
+var bullet_42mm_spin: SpinBox
+var fortress_17mm_bullet_spin: SpinBox
+var initial_speed_spin: SpinBox
+var shoot_timestamp_spin: SpinBox
 var base_hp_spin: SpinBox
 var outpost_hp_spin: SpinBox
+var hero_hp_spin: SpinBox
+var infantry_1_hp_spin: SpinBox
+var infantry_2_hp_spin: SpinBox
+var engineer_hp_spin: SpinBox
 var remaining_time_spin: SpinBox
+var sync_timestamp_spin: SpinBox
 var exchangeable_ammo_spin: SpinBox
+var exchanged_bullet_spin: SpinBox
+var robot_id_spin: SpinBox
+var instant_revive_cost_spin: SpinBox
+var remote_bullet_exchange_count_spin: SpinBox
 var dart_hits_spin: SpinBox
+var map_command_x_spin: SpinBox
+var map_command_y_spin: SpinBox
+var map_command_keyboard_spin: SpinBox
+var map_command_target_robot_id_spin: SpinBox
+var map_command_source_spin: SpinBox
+var map_command_sequence_spin: SpinBox
 var fortress_occupied_toggle: CheckButton
 var big_energy_mechanism_toggle: CheckButton
 var small_energy_mechanism_toggle: CheckButton
+var chassis_output_status_toggle: CheckButton
+var can_confirm_free_revive_toggle: CheckButton
+var can_exchange_instant_revive_toggle: CheckButton
+var energy_mechanism_activatable_toggle: CheckButton
 var stage_select: OptionButton
 var rswitch_select: OptionButton
 var lswitch_select: OptionButton
@@ -159,6 +205,7 @@ var gold_badge_panel: Control
 var base_badge_panel: Control
 var outpost_badge_panel: Control
 var loot_overlay: Node3D
+var runtime_label: RichTextLabel
 
 
 func _ready() -> void:
@@ -425,6 +472,13 @@ func _handle_message(msg: Dictionary) -> void:
 			_refresh_display()
 		return
 
+	if t == "sim.runtime_state":
+		var payload = msg.get("state", {})
+		if typeof(payload) == TYPE_DICTIONARY:
+			runtime_state = payload.duplicate(true)
+			_refresh_display()
+		return
+
 	# Loot 语义监控快照。
 	if t == "loot.snapshot":
 		var rev := int(msg.get("bb_rev", -1))
@@ -466,9 +520,21 @@ func _handle_message(msg: Dictionary) -> void:
 		_apply_robot_chassis_mode(str(msg.get("mode", "")))
 		return
 
+	if t == "sim.controller_mode":
+		_apply_robot_controller_mode(str(msg.get("mode", "")))
+		return
+
+	if t == "sim.navigation_enabled":
+		_apply_robot_navigation_enabled(_get_boolean_value(msg.get("enabled", false), false))
+		return
+
 	# 云台控制源切换 (manual / scan / auto)。
 	if t == "sim.gimbal_dominator":
 		_apply_robot_gimbal_dominator(str(msg.get("name", "")))
+		return
+
+	if t == "sim.autoaim_enabled":
+		_apply_robot_autoaim_enabled(_get_boolean_value(msg.get("enabled", false), false))
 		return
 
 	# 云台手动朝向设定。
@@ -495,19 +561,43 @@ func _send_input() -> void:
 			"health": int(resource.get("health", 0)),
 			"bullet": int(resource.get("bullet", 0)),
 			"gold": int(resource.get("gold", 0)),
+			"chassis_power_limit": _get_numeric_value(resource.get("chassis_power_limit", 0.0), 0.0),
+			"chassis_power": _get_numeric_value(resource.get("chassis_power", 0.0), 0.0),
+			"chassis_buffer_energy": _get_numeric_value(resource.get("chassis_buffer_energy", 0.0), 0.0),
+			"chassis_output_status": _get_boolean_value(resource.get("chassis_output_status", false), false),
+			"shooter_cooling": _get_numeric_value(resource.get("shooter_cooling", 0.0), 0.0),
+			"shooter_heat_limit": _get_numeric_value(resource.get("shooter_heat_limit", 0.0), 0.0),
+			"bullet_42mm": _get_numeric_value(resource.get("bullet_42mm", 0.0), 0.0),
+			"fortress_17mm_bullet": _get_numeric_value(resource.get("fortress_17mm_bullet", 0.0), 0.0),
+			"initial_speed": _get_numeric_value(resource.get("initial_speed", 0.0), 0.0),
+			"shoot_timestamp": _get_numeric_value(resource.get("shoot_timestamp", 0.0), 0.0),
 			"auto_aim_should_control": bool(resource.get("auto_aim_should_control", false)),
 		},
 		"game": {
 			"base_health": sim_base_health,
 			"outpost_health": sim_outpost_health,
 			"gold_coin": _get_current_gold_value(),
+			"sync_timestamp": sim_time,
+			"hero_health": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("hero_health", 0), 0.0))),
+			"infantry_1_health": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("infantry_1_health", 0), 0.0))),
+			"infantry_2_health": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("infantry_2_health", 0), 0.0))),
+			"engineer_health": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("engineer_health", 0), 0.0))),
 			"remaining_time": sim_remaining_time,
 			"exchangeable_ammunition_quantity": sim_exchangeable_ammunition_quantity,
 			"our_dart_nmber_of_hits": sim_our_dart_nmber_of_hits,
 			"fortress_occupied": sim_fortress_occupied,
 			"big_energy_mechanism_activated": sim_big_energy_mechanism_activated,
 			"small_energy_mechanism_activated": sim_small_energy_mechanism_activated,
+			"robot_id": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("robot_id", 0), 0.0))),
+			"can_confirm_free_revive": _get_boolean_value(_get_dict_value(blackboard, "game").get("can_confirm_free_revive", false), false),
+			"can_exchange_instant_revive": _get_boolean_value(_get_dict_value(blackboard, "game").get("can_exchange_instant_revive", false), false),
+			"instant_revive_cost": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("instant_revive_cost", 0), 0.0))),
+			"exchanged_bullet": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("exchanged_bullet", 0), 0.0))),
+			"remote_bullet_exchange_count": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("remote_bullet_exchange_count", 0), 0.0))),
+			"sentry_mode": int(round(_get_numeric_value(_get_dict_value(blackboard, "game").get("sentry_mode", 0), 0.0))),
+			"energy_mechanism_activatable": _get_boolean_value(_get_dict_value(blackboard, "game").get("energy_mechanism_activatable", false), false),
 		},
+		"map_command": _get_dict_value(blackboard, "map_command"),
 		"meta": {
 			"timestamp": sim_time,
 		},
@@ -1852,10 +1942,25 @@ func _apply_robot_chassis_mode(mode: String) -> void:
 		robot.call("set_chassis_mode", mode)
 
 
+func _apply_robot_controller_mode(mode: String) -> void:
+	if robot.has_method("set_controller_mode"):
+		robot.call("set_controller_mode", mode)
+
+
+func _apply_robot_navigation_enabled(enabled: bool) -> void:
+	if robot.has_method("set_navigation_enabled"):
+		robot.call("set_navigation_enabled", enabled)
+
+
 ## 将 Lua 云台控制源指令转发到 AI 机器人。
 func _apply_robot_gimbal_dominator(dominator_name: String) -> void:
 	if robot.has_method("set_gimbal_dominator"):
 		robot.call("set_gimbal_dominator", dominator_name)
+
+
+func _apply_robot_autoaim_enabled(enabled: bool) -> void:
+	if robot.has_method("set_autoaim_enabled"):
+		robot.call("set_autoaim_enabled", enabled)
 
 
 ## 将 Lua 云台方向指令转发到 AI 机器人。

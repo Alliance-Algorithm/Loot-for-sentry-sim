@@ -421,6 +421,15 @@ struct SimState {
         std::optional<double> health;     ///< 健康值(可选)
         std::optional<double> bullet;     ///< 子弹数量(可选)
         std::optional<double> gold;       ///< 金币(可选)
+        std::optional<double> chassis_power;         ///< 底盘功率(可选)
+        std::optional<double> chassis_buffer_energy; ///< 底盘缓冲能量(可选)
+        std::optional<bool> chassis_output_status;   ///< 底盘输出状态(可选)
+        std::optional<double> shooter_cooling;       ///< 枪口冷却值(可选)
+        std::optional<double> shooter_heat_limit;    ///< 枪口热量上限(可选)
+        std::optional<double> bullet_42mm;           ///< 42mm 弹量(可选)
+        std::optional<double> fortress_17mm_bullet;  ///< 堡垒 17mm 弹量(可选)
+        std::optional<double> initial_speed;         ///< 初速(可选)
+        std::optional<double> shoot_timestamp;       ///< 发射时间戳(可选)
         bool auto_aim_should_control = false; ///< 自瞄是否接管
     };
 
@@ -443,6 +452,19 @@ struct SimState {
         std::optional<double> base_health;                      ///< 基地血量(可选)
         std::optional<double> outpost_health;                   ///< 前哨站血量(可选)
         std::optional<double> gold_coin;                        ///< 队伍金币(可选)
+        std::optional<double> sync_timestamp;                   ///< 裁判同步时间(可选)
+        std::optional<double> hero_health;                      ///< 英雄血量(可选)
+        std::optional<double> infantry_1_health;                ///< 步兵1血量(可选)
+        std::optional<double> infantry_2_health;                ///< 步兵2血量(可选)
+        std::optional<double> engineer_health;                  ///< 工程血量(可选)
+        std::optional<double> hero_position_x;                  ///< 英雄位置X(可选)
+        std::optional<double> hero_position_y;                  ///< 英雄位置Y(可选)
+        std::optional<double> infantry_1_position_x;            ///< 步兵1位置X(可选)
+        std::optional<double> infantry_1_position_y;            ///< 步兵1位置Y(可选)
+        std::optional<double> infantry_2_position_x;            ///< 步兵2位置X(可选)
+        std::optional<double> infantry_2_position_y;            ///< 步兵2位置Y(可选)
+        std::optional<double> engineer_position_x;              ///< 工程位置X(可选)
+        std::optional<double> engineer_position_y;              ///< 工程位置Y(可选)
         std::optional<double> remaining_time;                   ///< 比赛剩余时间(可选)
         std::optional<double> exchangeable_ammunition_quantity; ///< 可兑换弹药量(可选)
         std::optional<double> our_dart_nmber_of_hits;           ///< 己方飞镖命中次数(可选)
@@ -450,9 +472,14 @@ struct SimState {
         std::optional<bool> big_energy_mechanism_activated;     ///< 大能量机关是否激活(可选)
         std::optional<bool> small_energy_mechanism_activated;   ///< 小能量机关是否激活(可选)
         std::optional<std::string> stage;                       ///< 比赛阶段(可选)
+        std::optional<double> robot_id;                         ///< 机器人ID(可选)
         std::optional<bool> can_confirm_free_revive;            ///< 是否可确认免费复活
+        std::optional<bool> can_exchange_instant_revive;        ///< 是否可兑换立即复活
+        std::optional<double> instant_revive_cost;              ///< 立即复活花费
         std::optional<double> exchanged_bullet;                 ///< 已兑换弹量
+        std::optional<double> remote_bullet_exchange_count;     ///< 远程换弹次数
         std::optional<double> sentry_mode;                      ///< 当前哨兵模式
+        std::optional<bool> energy_mechanism_activatable;       ///< 能量机关是否可激活
     };
 
     struct Play {
@@ -460,9 +487,19 @@ struct SimState {
         std::optional<std::string> lswitch;
     };
 
+    struct MapCommand {
+        std::optional<double> x;
+        std::optional<double> y;
+        std::optional<double> keyboard;
+        std::optional<double> target_robot_id;
+        std::optional<double> source;
+        std::optional<double> sequence;
+    };
+
     User user;                                                  ///< 用户控制状态
     Game game;                                                  ///< 比赛全局状态
     Play play;                                                  ///< 遥控拨杆状态
+    MapCommand map_command;                                     ///< 小地图指令状态
     Meta meta;                                                  ///< 元数据信息
 };
 
@@ -475,6 +512,41 @@ struct OverrideState {
     bool enabled = false;            ///< 是否启用状态覆盖
     std::uint64_t last_rev = 0;      ///< 最后修订版本号
     std::optional<YAML::Node> patch; ///< 状态补丁配置
+};
+
+enum class RelocalizeStateCode : int {
+    Idle = 0,
+    InFlight = 1,
+    Succeeded = 2,
+    Failed = 3,
+};
+
+struct RelocalizeRuntimeState {
+    RelocalizeStateCode state = RelocalizeStateCode::Idle;
+    bool success = false;
+    std::string message = "idle";
+    double fitness_score = 0.0;
+    double confidence = 0.0;
+    double estimated_x = 0.0;
+    double estimated_y = 0.0;
+    double estimated_z = 0.0;
+    double estimated_qx = 0.0;
+    double estimated_qy = 0.0;
+    double estimated_qz = 0.0;
+    double estimated_qw = 1.0;
+};
+
+struct HostCommandState {
+    bool navigation_enabled = false;
+    bool autoaim_enabled = false;
+    bool topic_forward_enabled = false;
+    bool navigation_running = false;
+    std::string controller_mode = "normal";
+    std::string chassis_mode = "auto";
+    std::string gimbal_dominator = "manual";
+    double gimbal_direction = 0.0;
+    double manual_chassis_velocity_x = 0.0;
+    double manual_chassis_velocity_y = 0.0;
 };
 
 /**
@@ -500,6 +572,8 @@ private:
     EmitFn emit;                                                     ///< 事件发射器
     LogFn log;                                                       ///< 日志记录器
     bool closed = false;                                             ///< 运行时是否已关闭
+    HostCommandState command_state;                                  ///< 宿主命令态
+    RelocalizeRuntimeState relocalize_state;                         ///< 重定位可视态
 
     /**
      * @brief 解包Lua函数调用结果
@@ -537,6 +611,46 @@ private:
                 {"level", std::string{to_string(level)}},
                 {"message", message},
             });
+    }
+
+    auto emit_runtime_status() -> void {
+        emit(
+            JsonFields{
+                {"type", std::string{"sim.runtime_status"}},
+                {"navigation_enabled", command_state.navigation_enabled},
+                {"autoaim_enabled", command_state.autoaim_enabled},
+                {"topic_forward_enabled", command_state.topic_forward_enabled},
+                {"navigation_running", command_state.navigation_running},
+                {"controller_mode", command_state.controller_mode},
+                {"chassis_mode", command_state.chassis_mode},
+                {"gimbal_dominator", command_state.gimbal_dominator},
+                {"gimbal_direction", command_state.gimbal_direction},
+                {"manual_chassis_velocity_x", command_state.manual_chassis_velocity_x},
+                {"manual_chassis_velocity_y", command_state.manual_chassis_velocity_y},
+                {"relocalize_state", static_cast<double>(static_cast<int>(relocalize_state.state))},
+                {"relocalize_success", relocalize_state.success},
+                {"relocalize_message", relocalize_state.message},
+                {"relocalize_fitness_score", relocalize_state.fitness_score},
+                {"relocalize_confidence", relocalize_state.confidence},
+            });
+    }
+
+    auto mark_relocalize_success(std::string_view mode, double x, double y) -> bool {
+        relocalize_state.state = RelocalizeStateCode::Succeeded;
+        relocalize_state.success = true;
+        relocalize_state.message = std::format("{} mocked success", mode);
+        relocalize_state.fitness_score = 1.0;
+        relocalize_state.confidence = 1.0;
+        relocalize_state.estimated_x = x;
+        relocalize_state.estimated_y = y;
+        relocalize_state.estimated_z = 0.0;
+        relocalize_state.estimated_qx = 0.0;
+        relocalize_state.estimated_qy = 0.0;
+        relocalize_state.estimated_qz = 0.0;
+        relocalize_state.estimated_qw = 1.0;
+        emit_log(LogLevel::Info, relocalize_state.message);
+        emit_runtime_status();
+        return true;
     }
 
     /**
@@ -740,12 +854,13 @@ private:
         api.set_function(
             "fuck", [this](const std::string& text) { emit_log(LogLevel::Error, text); });
         api.set_function("update_enable_control", [this](bool enable) {
-            auto play = blackboard["play"].get<sol::table>();
-            if (enable) {
-                play["rswitch"] = std::string{"UP"};
-            } else if (play["rswitch"].get_or(std::string{"UNKNOWN"}) == "UP") {
-                play["rswitch"] = std::string{"MIDDLE"};
-            }
+            command_state.navigation_enabled = enable;
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.navigation_enabled"}},
+                    {"enabled", enable},
+                });
+            emit_runtime_status();
         });
 
         api.set_function("send_target", [this](double x, double y) {
@@ -757,64 +872,86 @@ private:
                 });
         });
         api.set_function("update_gimbal_direction", [this](double angle) {
+            command_state.gimbal_direction = angle;
             emit(
                 JsonFields{
                     {"type", std::string{"sim.gimbal_direction"}},
                     {"angle", angle},
                 });
+            emit_runtime_status();
         });
         api.set_function("update_gimbal_dominator", [this](const std::string& name) {
+            command_state.gimbal_dominator = name;
             emit(
                 JsonFields{
                     {"type", std::string{"sim.gimbal_dominator"}},
                     {"name", name},
                 });
+            emit_runtime_status();
         });
         api.set_function("switch_controller", [this](const std::string& mode) {
-            emit_log(LogLevel::Info, std::format("switch_controller no-op: {}", mode));
+            command_state.controller_mode = mode;
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.controller_mode"}},
+                    {"mode", mode},
+                });
+            emit_runtime_status();
         });
         api.set_function("update_chassis_mode", [this](const std::string& mode) {
+            command_state.chassis_mode = mode;
             emit(
                 JsonFields{
                     {"type", std::string{"sim.chassis_mode"}},
                     {"mode", mode},
                 });
+            emit_runtime_status();
         });
         api.set_function("update_enable_autoaim", [this](bool enable) {
-            auto user = blackboard["user"].get<sol::table>();
-            user["auto_aim_should_control"] = enable;
+            command_state.autoaim_enabled = enable;
+            command_state.gimbal_dominator = enable ? "auto" : "scan";
             emit(
                 JsonFields{
                     {"type", std::string{"sim.gimbal_dominator"}},
                     {"name", std::string{enable ? "auto" : "scan"}},
                 });
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.autoaim_enabled"}},
+                    {"enabled", enable},
+                });
+            emit_runtime_status();
         });
         api.set_function("update_chassis_vel", [this](double x, double y) {
+            command_state.manual_chassis_velocity_x = x;
+            command_state.manual_chassis_velocity_y = y;
             emit(
                 JsonFields{
                     {"type", std::string{"sim.chassis_vel"}},
                     {"x", x},
                     {"y", y},
                 });
+            emit_runtime_status();
         });
-        api.set_function("relocalize_initial", [this](double, double, double) {
-            emit_log(LogLevel::Info, "relocalize_initial mocked success in sim mode");
-            return true;
+        api.set_function("relocalize_initial", [this](double x, double y, double) {
+            return mark_relocalize_success("relocalize_initial", x, y);
         });
-        api.set_function("relocalize_local", [this](double, double, double) {
-            emit_log(LogLevel::Info, "relocalize_local mocked success in sim mode");
-            return true;
+        api.set_function("relocalize_local", [this](double x, double y, double) {
+            return mark_relocalize_success("relocalize_local", x, y);
         });
-        api.set_function("relocalize_wide", [this](double, double, double) {
-            emit_log(LogLevel::Info, "relocalize_wide mocked success in sim mode");
-            return true;
+        api.set_function("relocalize_wide", [this](double x, double y, double) {
+            return mark_relocalize_success("relocalize_wide", x, y);
         });
         api.set_function("relocalize_status", [this]() {
             return lua->create_table_with(
-                "state", 2, "success", true, "message", std::string{"sim mocked success"},
-                "fitness_score", 1.0, "confidence", 1.0, "estimated_x", 0.0, "estimated_y",
-                0.0, "estimated_z", 0.0, "estimated_qx", 0.0, "estimated_qy", 0.0,
-                "estimated_qz", 0.0, "estimated_qw", 1.0);
+                "state", static_cast<int>(relocalize_state.state), "success",
+                relocalize_state.success, "message", relocalize_state.message, "fitness_score",
+                relocalize_state.fitness_score, "confidence", relocalize_state.confidence,
+                "estimated_x", relocalize_state.estimated_x, "estimated_y",
+                relocalize_state.estimated_y, "estimated_z", relocalize_state.estimated_z,
+                "estimated_qx", relocalize_state.estimated_qx, "estimated_qy",
+                relocalize_state.estimated_qy, "estimated_qz", relocalize_state.estimated_qz,
+                "estimated_qw", relocalize_state.estimated_qw);
         });
         api.set_function("exchange_17mm_bullet", [this](int amount) {
             auto game = blackboard["game"].get<sol::table>();
@@ -834,14 +971,30 @@ private:
 
         // Sidecar mode: keep these entry points but avoid touching ROS processes.
         api.set_function("switch_topic_forward", [this](bool enable) {
-            emit_log(LogLevel::Info, std::format("switch_topic_forward no-op: {}", enable));
+            command_state.topic_forward_enabled = enable;
+            emit_runtime_status();
+            emit_log(LogLevel::Info, std::format("switch_topic_forward -> {}", enable));
         });
         api.set_function("restart_navigation", [this](const sol::table&) {
-            emit_log(LogLevel::Info, "restart_navigation no-op in sim mode");
+            command_state.navigation_running = true;
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.navigation_lifecycle"}},
+                    {"state", std::string{"running"}},
+                });
+            emit_runtime_status();
+            emit_log(LogLevel::Info, "restart_navigation simulated");
             return std::tuple{true, std::string{"ok"}};
         });
         api.set_function("stop_navigation", [this]() {
-            emit_log(LogLevel::Info, "stop_navigation no-op in sim mode");
+            command_state.navigation_running = false;
+            emit(
+                JsonFields{
+                    {"type", std::string{"sim.navigation_lifecycle"}},
+                    {"state", std::string{"stopped"}},
+                });
+            emit_runtime_status();
+            emit_log(LogLevel::Info, "stop_navigation simulated");
             return std::tuple{true, std::string{"ok"}};
         });
     }
@@ -879,7 +1032,8 @@ public:
 
     explicit LuaRuntime(
         const std::string& lua_root, const std::string& loot_lua_root, const std::string& endpoint,
-        EmitFn emit_action, LogFn log_action, std::optional<YAML::Node> option_patch = std::nullopt)
+        EmitFn emit_action, LogFn log_action, std::optional<YAML::Node> option_patch = std::nullopt,
+        std::optional<YAML::Node> blackboard_patch = std::nullopt)
         : lua{std::make_unique<sol::state>()}
         , emit{std::move(emit_action)}
         , log{std::move(log_action)} {
@@ -938,8 +1092,13 @@ public:
             throw std::runtime_error("Loot.blackboard_sync must define snapshot()");
         }
 
+        if (blackboard_patch && blackboard_patch->IsMap()) {
+            apply_override_patch(*blackboard_patch);
+        }
+
         unwrap_result(on_init(), "lua on_init failed");
         emit_log(LogLevel::Info, "lua runtime initialized");
+        emit_runtime_status();
     }
 
     /// @brief 析构函数，自动关闭Lua运行时
@@ -1074,6 +1233,36 @@ public:
         return lua_to_yaml(result.get<sol::object>());
     }
 
+    [[nodiscard]] auto snapshot_host_runtime() const -> YAML::Node {
+        auto state = YAML::Node{YAML::NodeType::Map};
+        state["navigation_enabled"] = command_state.navigation_enabled;
+        state["autoaim_enabled"] = command_state.autoaim_enabled;
+        state["topic_forward_enabled"] = command_state.topic_forward_enabled;
+        state["navigation_running"] = command_state.navigation_running;
+        state["controller_mode"] = command_state.controller_mode;
+        state["chassis_mode"] = command_state.chassis_mode;
+        state["gimbal_dominator"] = command_state.gimbal_dominator;
+        state["gimbal_direction"] = command_state.gimbal_direction;
+        state["manual_chassis_velocity_x"] = command_state.manual_chassis_velocity_x;
+        state["manual_chassis_velocity_y"] = command_state.manual_chassis_velocity_y;
+
+        auto relocalize = YAML::Node{YAML::NodeType::Map};
+        relocalize["state"] = static_cast<int>(relocalize_state.state);
+        relocalize["success"] = relocalize_state.success;
+        relocalize["message"] = relocalize_state.message;
+        relocalize["fitness_score"] = relocalize_state.fitness_score;
+        relocalize["confidence"] = relocalize_state.confidence;
+        relocalize["estimated_x"] = relocalize_state.estimated_x;
+        relocalize["estimated_y"] = relocalize_state.estimated_y;
+        relocalize["estimated_z"] = relocalize_state.estimated_z;
+        relocalize["estimated_qx"] = relocalize_state.estimated_qx;
+        relocalize["estimated_qy"] = relocalize_state.estimated_qy;
+        relocalize["estimated_qz"] = relocalize_state.estimated_qz;
+        relocalize["estimated_qw"] = relocalize_state.estimated_qw;
+        state["relocalize"] = relocalize;
+        return state;
+    }
+
     /**
      * @brief 执行定时回调
      *
@@ -1155,6 +1344,7 @@ struct Args {
     double tick_hz = 10.0;                                        ///< 定时器频率(Hz)
     int state_timeout_ms = 500;                                   ///< 状态超时时间(毫秒)
     std::optional<std::string> option_file;                       ///< 可选配置文件路径
+    std::optional<std::string> blackboard_file;                   ///< 可选黑板补丁路径
 };
 
 [[nodiscard]] auto parse_args(int argc, char** argv) -> Args {
@@ -1185,6 +1375,8 @@ struct Args {
             args.state_timeout_ms = std::stoi(take_next(token));
         } else if (token == "--option-file") {
             args.option_file = take_next(token);
+        } else if (token == "--blackboard-file") {
+            args.blackboard_file = take_next(token);
         } else if (token == "--help" || token == "-h") {
             std::cout << "rmcs-navigation-sim-sidecar\n"
                       << "  --host <host>                (default: 0.0.0.0)\n"
@@ -1194,7 +1386,8 @@ struct Args {
                       << "  --loot-lua-root <path>       (default: <source>/src/sim/Loot/lua)\n"
                       << "  --tick-hz <hz>               (default: 10)\n"
                       << "  --state-timeout-ms <ms>      (default: 500)\n"
-                      << "  --option-file <yaml/json>\n";
+                      << "  --option-file <yaml/json>\n"
+                      << "  --blackboard-file <yaml/json>\n";
             std::exit(0);
         } else {
             throw std::runtime_error(std::format("unknown argument: {}", token));
@@ -1660,9 +1853,14 @@ auto handle_client(const Args& args, int client_fd) -> void {
     if (args.option_file) {
         option_patch = YAML::LoadFile(*args.option_file);
     }
+    auto startup_blackboard_patch = std::optional<YAML::Node>{};
+    if (args.blackboard_file) {
+        startup_blackboard_patch = YAML::LoadFile(*args.blackboard_file);
+    }
 
     auto runtime = LuaRuntime{
         args.lua_root, args.loot_lua_root, args.endpoint, write_message, logger, option_patch,
+        startup_blackboard_patch,
     };
 
     auto emit_runtime_state = [&]() {
@@ -1686,6 +1884,12 @@ auto handle_client(const Args& args, int client_fd) -> void {
         loot_msg["bb_rev"] = static_cast<long long>(bb_rev);
         loot_msg["loot"] = runtime.snapshot_loot();
         send_line(client_fd, to_json(loot_msg));
+
+        auto runtime_msg = YAML::Node{YAML::NodeType::Map};
+        runtime_msg["type"] = "sim.runtime_state";
+        runtime_msg["bb_rev"] = static_cast<long long>(bb_rev);
+        runtime_msg["state"] = runtime.snapshot_host_runtime();
+        send_line(client_fd, to_json(runtime_msg));
     };
 
     emit_runtime_state();
